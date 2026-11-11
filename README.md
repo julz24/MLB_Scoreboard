@@ -29,9 +29,9 @@ SHA-256) avant d'être installé.
 Publier une version :
 
 1. Augmenter `FW_VERSION` dans [version.h](version.h) et commiter.
-2. Étiqueter et pousser :
+2. Étiqueter (le message devient le texte « Nouveautés » affiché par le tableau) et pousser :
    ```bash
-   git tag v1.2.0
+   git tag -a v1.2.0 -m "Nouveautés de la version, une par ligne"
    git push origin main v1.2.0
    ```
 3. GitHub Actions compile le firmware et publie la release avec les deux fichiers `.bin`.

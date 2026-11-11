@@ -517,7 +517,13 @@ char     fwLatest[16] = "";           // derniere version publiee ("1.2.0")
 char     fwUrl[256]   = "";           // adresse du .bin de cette release
 char     fwSha[65]    = "";           // SHA-256 attendu (hex)
 uint32_t fwSize       = 0;
-char     fwErr[48]    = "";           // derniere erreur (affichee dans la web UI)
+uint8_t  fwErrCode    = 0;            // derniere erreur, code traduit par la web UI (FW_E_*), 0 = aucune
+char     fwNotes[1500] = "";          // nouveautes de la derniere version (texte de la release)
+// Codes d'erreur de mise a jour. La web UI a le texte FR/EN de chaque code (TRX.fwErrs) :
+// garder le meme ordre des deux cotes.
+enum { FW_E_NONE, FW_E_CONFIG, FW_E_UNREACHABLE, FW_E_BAD_REPLY, FW_E_NO_RELEASE, FW_E_NO_FILE,
+       FW_E_NO_CHECKSUM, FW_E_REFUSED, FW_E_SIZE, FW_E_NO_ROOM, FW_E_WRITE, FW_E_INTERRUPTED,
+       FW_E_CHECKSUM, FW_E_INVALID, FW_E_BAD_URL };
 unsigned long lastFetch = 0, lastRotate = 0;
 const unsigned long FETCH_MS = 30000;      // intervalle si au moins un match est en direct
 const unsigned long FETCH_MS_SLOW = 900000; // intervalle sinon (15 min) - reduit la frequence de connexions reseau quand rien ne se passe (etait 5 min)

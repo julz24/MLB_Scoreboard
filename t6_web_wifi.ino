@@ -31,7 +31,7 @@ void handleState() {
   j += ",\"fwLatest\":\"" + String(fwLatest) + "\"";
   j += ",\"fwStat\":" + String(fwStat);
   j += ",\"fwProg\":" + String(fwProgress);
-  j += ",\"fwErr\":\"" + wxJsonEsc(fwErr) + "\"";
+  j += ",\"fwErr\":" + String(fwErrCode);
   j += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
   j += ",\"rssi\":" + String(WiFi.RSSI());
   j += ",\"games\":" + String(gameCount);

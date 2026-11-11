@@ -4,7 +4,10 @@
 #
 # Publier une version :
 #   1. augmenter FW_VERSION dans version.h (ex. "1.2.0") et commiter
-#   2. git tag v1.2.0 && git push origin main v1.2.0
+#   2. git tag -a v1.2.0 -m "Nouveautes de la version, une par ligne"
+#      git push origin main v1.2.0
+# Le message de l'etiquette devient le texte de la release : c'est lui que le
+# tableau affiche dans la fenetre "Nouveautes" de la web UI.
 name: Release firmware
 
 on:
@@ -36,6 +39,15 @@ jobs:
             echo "::error::L'etiquette v$tag ne correspond pas a FW_VERSION \"$ver\" dans version.h"
             exit 1
           fi
+
+      - name: Texte de la release (message de l'etiquette annotee)
+        working-directory: MLB_Scoreboard
+        run: |
+          # actions/checkout ne recupere pas l'objet de l'etiquette annotee : on le
+          # telecharge, puis on garde seulement son message (pas l'auteur ni la date).
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "${GITHUB_REF_NAME}" > ../notes.md
+          cat ../notes.md
 
       - uses: arduino/setup-arduino-cli@v2
 
@@ -69,4 +81,4 @@ jobs:
           files: |
             out/scoreboard.bin
             out/scoreboard-usb-complet.bin
-          generate_release_notes: true
+          body_path: notes.md            # message de l'etiquette (pas de notes generees : elles contiennent des liens)

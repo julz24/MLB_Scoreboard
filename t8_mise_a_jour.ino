@@ -27,24 +27,26 @@ static long fwVersionNum(const char* v) {
   return (long)a * 1000000L + (long)b * 1000L + c;
 }
 
-static void fwSetError(const char* msg) {
-  strncpy(fwErr, msg, sizeof(fwErr) - 1); fwErr[sizeof(fwErr) - 1] = 0;
+// code = FW_E_* (traduit par la web UI) ; msg = texte des logs.
+static void fwSetError(uint8_t code, const char* msg) {
+  fwErrCode = code;
   fwStat = FW_ERROR;
   logAdd(String("MAJ: ") + msg);
 }
 
 // Lit la derniere release publiee. Renvoie true si la reponse a ete comprise.
 bool fwCheck() {
-  if (!FW_REPO[0]) { fwSetError("depot GitHub non configure (version.h)"); return false; }
+  if (!FW_REPO[0]) { fwSetError(FW_E_CONFIG, "depot non configure (FW_REPO dans version.h)"); return false; }
   fwStat = FW_CHECKING;
   int len = 0;
   uint8_t* buf = httpsDownload("MAJ", "api.github.com",
                                String("https://api.github.com/repos/") + FW_REPO + "/releases/latest",
                                200000, len, 30000, true);
-  if (!buf) { fwSetError("GitHub injoignable"); return false; }
+  if (!buf) { fwSetError(FW_E_UNREACHABLE, "serveur de mises a jour injoignable"); return false; }
 
   JsonDocument filter;
   filter["tag_name"] = true;
+  filter["body"] = true;                             // nouveautes (message de l'etiquette, voir le workflow)
   JsonObject af = filter["assets"][0].to<JsonObject>();
   af["name"] = true;
   af["size"] = true;
@@ -53,14 +55,14 @@ bool fwCheck() {
   JsonDocument doc(&psramAllocator);
   DeserializationError err = deserializeJson(doc, (char*)buf, len, DeserializationOption::Filter(filter));
   free(buf);
-  if (err) { fwSetError("reponse GitHub illisible"); return false; }
+  if (err) { fwSetError(FW_E_BAD_REPLY, "reponse illisible"); return false; }
 
   const char* tag = doc["tag_name"] | "";
-  if (!tag[0]) { fwSetError("aucune release publiee"); return false; }
+  if (!tag[0]) { fwSetError(FW_E_NO_RELEASE, "aucune version publiee"); return false; }
   JsonObject asset;
   for (JsonObject a : doc["assets"].as<JsonArray>())
     if (strcmp(a["name"] | "", FW_ASSET) == 0) { asset = a; break; }
-  if (asset.isNull()) { fwSetError("release sans " FW_ASSET); return false; }
+  if (asset.isNull()) { fwSetError(FW_E_NO_FILE, "version publiee sans " FW_ASSET); return false; }
 
   strncpy(fwLatest, tag[0] == 'v' || tag[0] == 'V' ? tag + 1 : tag, sizeof(fwLatest) - 1);
   fwLatest[sizeof(fwLatest) - 1] = 0;
@@ -71,7 +73,9 @@ bool fwCheck() {
   if (strncmp(dg, "sha256:", 7) == 0 && strlen(dg) == 71) { strncpy(fwSha, dg + 7, 64); fwSha[64] = 0; }
 
   long have = fwVersionNum(FW_VERSION), latest = fwVersionNum(fwLatest);
-  fwErr[0] = 0;
+  const char* body = doc["body"] | "";
+  strncpy(fwNotes, body, sizeof(fwNotes) - 1); fwNotes[sizeof(fwNotes) - 1] = 0;
+  fwErrCode = FW_E_NONE;
   fwStat = (latest > have) ? FW_AVAILABLE : FW_UP_TO_DATE;
   logAdd("MAJ: version installee " FW_VERSION ", derniere release " + String(fwLatest) +
          (fwStat == FW_AVAILABLE ? " -> mise a jour disponible" : " -> a jour"));
@@ -96,7 +100,7 @@ static void fwPanel(int pct) {
 // Telecharge et installe fwUrl. Ne revient pas en cas de succes (redemarrage).
 void fwInstall() {
   if (fwStat != FW_AVAILABLE || !fwUrl[0]) return;
-  if (!fwSha[0]) { fwSetError("release sans somme SHA-256"); return; }
+  if (!fwSha[0]) { fwSetError(FW_E_NO_CHECKSUM, "version publiee sans somme SHA-256"); return; }
   logAdd("MAJ: installation de " + String(fwLatest) + " (" + String(fwSize) + " octets)");
   otaActive = true;                                  // suspend fetchs et rendu (comme ElegantOTA)
   fwStat = FW_INSTALLING; fwProgress = 0;
@@ -110,6 +114,7 @@ void fwInstall() {
   HTTPClient https;
   bool ok = false;
   const char* why = "echec inconnu";
+  uint8_t whyCode = FW_E_INVALID;
   if (https.begin(client, fwUrl)) {
     https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);   // GitHub redirige vers son stockage
     https.setTimeout(20000);
@@ -117,9 +122,9 @@ void fwInstall() {
     netStep("MAJ");
     int code = https.GET();
     int len = https.getSize();
-    if (code != 200) why = "telechargement refuse";
-    else if (len <= 0 || (fwSize > 0 && (uint32_t)len != fwSize)) why = "taille inattendue";
-    else if (!Update.begin(len, U_FLASH)) why = "pas de place pour le firmware";
+    if (code != 200) { why = "telechargement refuse"; whyCode = FW_E_REFUSED; }
+    else if (len <= 0 || (fwSize > 0 && (uint32_t)len != fwSize)) { why = "taille inattendue"; whyCode = FW_E_SIZE; }
+    else if (!Update.begin(len, U_FLASH)) { why = "pas de place pour le firmware"; whyCode = FW_E_NO_ROOM; }
     else {
       mbedtls_sha256_context sha;
       mbedtls_sha256_init(&sha);
@@ -146,16 +151,16 @@ void fwInstall() {
       mbedtls_sha256_free(&sha);
       char hex[65];
       for (int i = 0; i < 32; i++) snprintf(hex + i * 2, 3, "%02x", dig[i]);
-      if (writeErr) why = "erreur d'ecriture en flash";
-      else if (got != len) why = "telechargement interrompu";
-      else if (strcasecmp(hex, fwSha) != 0) why = "somme SHA-256 differente";
-      else if (!Update.end(false)) why = "firmware refuse par le verificateur";
+      if (writeErr) { why = "erreur d'ecriture en flash"; whyCode = FW_E_WRITE; }
+      else if (got != len) { why = "telechargement interrompu"; whyCode = FW_E_INTERRUPTED; }
+      else if (strcasecmp(hex, fwSha) != 0) { why = "somme SHA-256 differente"; whyCode = FW_E_CHECKSUM; }
+      else if (!Update.end(false)) { why = "firmware refuse par le verificateur"; whyCode = FW_E_INVALID; }
       else ok = true;
       if (!ok) Update.abort();
     }
     https.end();
   } else {
-    why = "adresse de telechargement invalide";
+    why = "adresse de telechargement invalide"; whyCode = FW_E_BAD_URL;
   }
   client.stop();
 
@@ -164,7 +169,7 @@ void fwInstall() {
     delay(500);
     ESP.restart();
   }
-  fwSetError(why);
+  fwSetError(whyCode, why);
   fwStat = FW_AVAILABLE;                             // on peut reessayer depuis la web UI
   otaActive = false;
   dirty = true;                                      // reaffiche les matchs
@@ -183,8 +188,10 @@ void fwStep(unsigned long now) {
 }
 
 // /api/fw?do=check | install : la web UI demande, netTask execute (jamais dans le contexte HTTP).
+// /api/fw?do=notes : nouveautes de la derniere version, en texte brut (fenetre de la web UI).
 void handleFw() {
   String d = server.arg("do");
+  if (d == "notes") { server.send(200, "text/plain; charset=utf-8", fwNotes); return; }
   if (d == "check") { fwCheckReq = true; fwStat = FW_CHECKING; }
   else if (d == "install" && fwStat == FW_AVAILABLE) fwInstallReq = true;
   else { server.send(400, "text/plain", "?"); return; }
