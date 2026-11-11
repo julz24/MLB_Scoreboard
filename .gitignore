@@ -1,0 +1,8 @@
+# Sorties de compilation Arduino (binaires, .elf, .map)
+build/
+*.bin
+*.elf
+*.map
+
+# Archives de sauvegarde manuelles
+*.zip
