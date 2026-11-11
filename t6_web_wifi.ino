@@ -27,6 +27,11 @@ void handleState() {
   j += ",\"favNfl\":\"" + String(cfgFavTeamNFL) + "\"";
   j += ",\"gamesNfl\":" + String(gameCountNFL);
   j += ",\"lang\":" + String(cfgLang);
+  j += ",\"fw\":\"" FW_VERSION "\"";
+  j += ",\"fwLatest\":\"" + String(fwLatest) + "\"";
+  j += ",\"fwStat\":" + String(fwStat);
+  j += ",\"fwProg\":" + String(fwProgress);
+  j += ",\"fwErr\":\"" + wxJsonEsc(fwErr) + "\"";
   j += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
   j += ",\"rssi\":" + String(WiFi.RSSI());
   j += ",\"games\":" + String(gameCount);

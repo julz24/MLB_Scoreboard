@@ -13,11 +13,14 @@ static inline void netStep(const char*) { esp_task_wdt_reset(); }
 // Telecharge une reponse HTTPS dans un tampon PSRAM (a liberer avec free()).
 // Poignee de main TLS bornee a 10 s, lecture bornee a 30 s au total, et
 // etapes marquees pour le temoin watchdog. nullptr en cas d'echec.
-static uint8_t* httpsDownload(const char* tag, const char* host, const String& url, int cap, int& outLen, unsigned long budgetMs = 45000) {
+// verifyTls = true : certificat du serveur verifie (paquet de certificats racine) - utilise pour
+// les mises a jour du firmware. Sinon setInsecure(), comme pour les pointages et la meteo.
+static uint8_t* httpsDownload(const char* tag, const char* host, const String& url, int cap, int& outLen, unsigned long budgetMs = 45000, bool verifyTls = false) {
   outLen = 0;
   netStep(tag);
   WiFiClientSecure client;
-  client.setInsecure();
+  if (verifyTls) client.setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
+  else           client.setInsecure();
   client.setTimeout(10000);
   client.setHandshakeTimeout(10);
   unsigned long tConn = millis();

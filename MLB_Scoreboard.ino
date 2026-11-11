@@ -22,7 +22,8 @@
      t5_fetch_autres_sports.ino    avantage numerique LNH, PWHL, NBA, NCAA
      t6_web_wifi.ino               web UI, WiFi, portail captif
      t7_main.ino                   setup(), netTask(), loop()
-     sport_util.h, web_ui.h, logos_*.h
+     t8_mise_a_jour.ino            mise a jour du firmware depuis les releases GitHub
+     version.h, sport_util.h, web_ui.h, logos_*.h
    L'IDE Arduino colle les onglets t1..t7 a la suite de ce fichier (ordre
    alphabetique) : l'ordre des declarations est donc celui des numeros.
    Partition recommandee : "Minimal SPIFFS (1.9MB APP with OTA)"
@@ -39,6 +40,9 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <ElegantOTA.h>
+#include <Update.h>             // mise a jour depuis GitHub (t8_mise_a_jour.ino)
+#include <mbedtls/sha256.h>     // controle SHA-256 du firmware telecharge
+#include "version.h"            // FW_VERSION, FW_REPO
 #include <Preferences.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <Fonts/TomThumb.h>    // petite police 3x5 (Adafruit GFX) - "Entracte" NHL
@@ -499,6 +503,21 @@ void logAdd(const String& line) {
 long tzOffsetSec = -4 * 3600;
 
 volatile bool otaActive = false;   // vrai pendant une mise a jour OTA (ElegantOTA onStart/onEnd)
+
+// ---- Mise a jour depuis GitHub (t8_mise_a_jour.ino) ----
+// Paquet de certificats racine (Mozilla) integre au core ESP32 : sert a verifier
+// les serveurs GitHub avant de telecharger un firmware.
+extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t x509_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
+enum { FW_IDLE, FW_CHECKING, FW_UP_TO_DATE, FW_AVAILABLE, FW_INSTALLING, FW_ERROR };
+volatile uint8_t fwStat = FW_IDLE;
+volatile bool fwCheckReq = false, fwInstallReq = false;   // demandes de la web UI, executees par netTask
+volatile int  fwProgress = 0;          // % pendant l'installation
+char     fwLatest[16] = "";           // derniere version publiee ("1.2.0")
+char     fwUrl[256]   = "";           // adresse du .bin de cette release
+char     fwSha[65]    = "";           // SHA-256 attendu (hex)
+uint32_t fwSize       = 0;
+char     fwErr[48]    = "";           // derniere erreur (affichee dans la web UI)
 unsigned long lastFetch = 0, lastRotate = 0;
 const unsigned long FETCH_MS = 30000;      // intervalle si au moins un match est en direct
 const unsigned long FETCH_MS_SLOW = 900000; // intervalle sinon (15 min) - reduit la frequence de connexions reseau quand rien ne se passe (etait 5 min)

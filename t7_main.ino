@@ -156,6 +156,7 @@ void setup() {
 
   server.on("/", []() { server.send_P(200, "text/html", PAGE_HTML); });
   server.on("/api/state", handleState);
+  server.on("/api/fw", handleFw);          // mise a jour depuis GitHub (t8_mise_a_jour.ino)
   server.on("/api/set", handleSet);
   server.on("/api/logs", []() {
     // Copie sous mutex puis envoi hors mutex : netTask peut decaler logBuf a tout moment.
@@ -330,6 +331,8 @@ void netTask(void* pv) {
       static bool rankNcaaLastOk = false;
       unsigned long rankIntervalNcaa = rankNcaaLastOk ? STAND_MS : 10UL * 60UL * 1000UL;   // fichier lourd : 30 min si ok, 10 min si echec
       if (cfgSportNCAA && (rankForceNCAA || now - lastStandNCAA >= rankIntervalNcaa)) { rankForceNCAA = false; lastStandNCAA = now; rankNcaaLastOk = fetchRankingsNCAA(); }
+
+      fwStep(now);   // mise a jour du firmware : verification periodique, installation sur demande de la web UI
     }
     // RAM libre + plus gros bloc contigu + RSSI WiFi, toutes les 60s : permet
     // de VOIR objectivement si la RAM se fragmente ou si le signal WiFi

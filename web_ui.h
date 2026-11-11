@@ -286,6 +286,11 @@ select,input[type=text]{width:58%;font-size:15px;border-radius:12px;border:1px s
   <div class="kv">
     <div class="k" id="t_ip">Adresse IP</div><div id="sysIp">-</div>
     <div class="k" id="t_net">Réseau</div><div id="sysNet">-</div>
+    <div class="k" id="t_fw">Version</div><div id="sysFw">-</div>
+  </div>
+  <div class="pills" id="fwPills" style="margin-top:12px">
+    <button class="pill p-ton" id="fwCheckBtn" onclick="fwDo('check')">Vérifier les mises à jour</button>
+    <button class="pill p-ton" id="fwInstBtn" style="display:none" onclick="fwInstall()">Installer</button>
   </div>
   <div class="pills">
     <a class="pill p-ton" href="/update" id="t_ota">Mise à jour OTA</a>
@@ -394,7 +399,9 @@ const TR={
   t_navParamSub:["Affichage, langue, système","Display, language, system"],
   t_sys:["Système","System"],
   t_ip:["Adresse IP","IP address"],
-  t_net:["Réseau","Network"]
+  t_net:["Réseau","Network"],
+  t_fw:["Version","Version"],
+  fwCheckBtn:["Vérifier les mises à jour","Check for updates"]
 };
 const TRX={
   noneFav:["Aucun (rotation complète)","None (full rotation)"],
@@ -407,7 +414,13 @@ const TRX={
   home:["Tableau d'affichage Sports","Sports Scoreboard"],
   sports:["Sports","Sports"],
   meteo:["Météo","Weather"],
-  param:["Paramètres","Settings"]
+  param:["Paramètres","Settings"],
+  fwChecking:["vérification…","checking…"],
+  fwUpToDate:["à jour","up to date"],
+  fwAvail:["nouvelle version","new version"],
+  fwInstalling:["installation","installing"],
+  fwInstall:["Installer la version","Install version"],
+  fwInstallQ:["Installer la version %v ? Le tableau redémarre tout seul à la fin (environ 1 minute). Ne pas le débrancher.","Install version %v ? The board restarts by itself when done (about 1 minute). Do not unplug it."]
 };
 let lang=0;   // 0=FR, 1=EN
 let lastState=null;
@@ -519,6 +532,7 @@ function applyDynamic(s){
   if(typeof s.gamesPwhl!=='undefined') document.getElementById('t_spPwhl').textContent = TR.t_spPwhl[lang] + ' (' + s.gamesPwhl + ' ' + TRX.sched[lang] + ')';
   sysIp.textContent = s.ip;
   sysNet.textContent = sigTxt(s.rssi);
+  if(typeof s.fw!=='undefined') showFw(s);
 }
 function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   lastState=s;
@@ -538,6 +552,29 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   showWx(s);
   applyLang();
 })}
+// ---- Mise a jour du firmware depuis GitHub ----
+// fwStat : 0 rien, 1 verification, 2 a jour, 3 disponible, 4 installation, 5 erreur
+let fwState=null;
+function showFw(s){
+  fwState=s;
+  let t='v'+s.fw;
+  if(s.fwStat==1) t+=' · '+TRX.fwChecking[lang];
+  else if(s.fwStat==2) t+=' · '+TRX.fwUpToDate[lang];
+  else if(s.fwStat==3) t+=' · '+TRX.fwAvail[lang]+' v'+s.fwLatest;
+  else if(s.fwStat==4) t+=' · '+TRX.fwInstalling[lang]+' '+s.fwProg+' %';
+  if(s.fwErr) t+=' · '+s.fwErr;
+  sysFw.textContent=t;
+  fwInstBtn.style.display = s.fwStat==3 ? 'inline-block' : 'none';
+  fwInstBtn.textContent = TRX.fwInstall[lang]+' v'+s.fwLatest;
+  fwCheckBtn.disabled = (s.fwStat==1 || s.fwStat==4);
+}
+function fwDo(d){ fetch('/api/fw?do='+d).then(()=>{ setTimeout(load,1500); setTimeout(load,6000); }); }
+function fwInstall(){
+  if(!fwState||!confirm(TRX.fwInstallQ[lang].replace('%v','v'+fwState.fwLatest))) return;
+  fwDo('install');
+  const t=setInterval(()=>load(),2000);       // progression ; le tableau redemarre a la fin
+  setTimeout(()=>clearInterval(t),180000);
+}
 function rebootConfirm(){ if(confirm(TRX.rebootQ[lang])) fetch('/api/reboot'); }
 function wifiConfirm(){ if(confirm(TRX.wifiQ[lang])) fetch('/api/wifi_reset'); }
 
