@@ -287,7 +287,7 @@ void netTask(void* pv) {
 
       unsigned long fetchIntervalNhl = nhlFavLive() ? FETCH_FAV_MS_NHL : (anyLiveGameNHL() ? FETCH_MS : FETCH_MS_SLOW);
       if (cfgSportNHL && now - lastFetchNHL >= fetchIntervalNhl) { lastFetchNHL = now; fetchGamesNHL(); }
-      if (cfgSportNHL && cfgSituation) nhlSituationStep(now);   // avantage numerique (play-by-play), un match a la fois
+      if (cfgSportNHL) nhlSituationStep(now);   // avantage numerique (play-by-play), un match a la fois
 
       bool nflFavLive = cfgFavTeamNFL[0] && favIdxNFL >= 0 && favIdxNFL < gameCountNFL && gamesNFL[favIdxNFL].state == 1;
       unsigned long fetchIntervalNfl = nflFavLive ? FETCH_FAV_MS_NFL : (anyLiveGameNFL() ? FETCH_MS : FETCH_MS_SLOW);

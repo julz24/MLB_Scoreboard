@@ -926,7 +926,7 @@ const char* nhlPeriodLabelCompact(uint8_t period) {
 // Avantage numerique du match g : 0 = aucun/inconnu, 1 = visiteur en AN, 2 = local en AN.
 // L'info vient du play-by-play (fetchNhlSituation) ; masquee si perimee, en entracte ou hors direct.
 static int nhlPPFor(const GameNHL& g) {
-  if (!cfgSituation || g.state != 1 || g.intermission || g.id == 0) return 0;
+  if (g.state != 1 || g.intermission || g.id == 0) return 0;
   for (int i = 0; i < nhlSitCount; i++)
     if (nhlSit[i].id == g.id) return (millis() - nhlSit[i].ms < SIT_FRESH_MS) ? nhlSit[i].pp : 0;
   return 0;
@@ -1081,7 +1081,9 @@ static void animDrawFrame(unsigned long el) {
 static bool animTick(unsigned long now) {
   if (!anim.active && goalReq.pending) {
     goalReq.pending = false;
-    if (cfgGoalAnim && cfgScreenOn) animStart();
+    bool on = goalReq.sport == 0 ? cfgGoalAnimNHL : cfgGoalAnimNFL;
+    if (on && cfgScreenOn) animStart();
+    else logAdd(String("Animation ignoree : ") + (!on ? "desactivee" : "ecran eteint"));
   }
   if (!anim.active) return false;
   unsigned long el = now - anim.t0;
@@ -1238,7 +1240,7 @@ static void drawPanelESPN(int px, const GameESPN& g, const uint16_t* la, const u
     drawClockNFL(px, T("Demi", "Half"), grey);
   } else {
     drawQuarterNFL(px, nbaPeriodLabel(g.period));                  // Q1-Q4, OT, 2OT
-    if (cfgSituation && g.poss) drawPossessionNFL(px, g.poss);     // ballon + fleche (NFL seulement : poss = 0 ailleurs)
+    if (g.poss) drawPossessionNFL(px, g.poss);     // ballon + fleche (NFL seulement : poss = 0 ailleurs)
     // Entre deux jeux le chrono est fige : c'est normal, l'API renvoie le temps arrete.
     drawClockNFL(px, g.clockStr, grey);
   }

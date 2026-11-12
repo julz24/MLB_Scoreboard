@@ -29,6 +29,7 @@ h2{font-size:20px;font-weight:500;margin:0 0 14px}
 .chev{margin-left:auto;color:var(--mut);font-size:22px;padding-left:8px}
 .sec{font-size:13px;font-weight:500;color:var(--pri);letter-spacing:.08em;margin-bottom:4px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0;min-height:32px}
+.ra{display:flex;align-items:center;gap:10px}
 .row>label:first-child{font-size:15px;color:var(--txt)}
 .val{font-weight:500;color:var(--pri)}
 .hint{font-size:13px;color:var(--mut)}
@@ -110,34 +111,24 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favNhl">Équipe favorite</label>
     <select id="favNhl" onchange="set('favNhl',this.value)"></select>
   </div>
-  <div class="row"><label id="t_wcNhl">Course aux séries</label>
+  <div class="row"><label id="t_wcNhl">Classement meilleur 2e</label>
     <label class="sw"><input type="checkbox" id="wcNhl" onchange="set('wcNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
   <div class="row"><label id="t_altLogoNhl">Logo alternatif</label>
     <label class="sw"><input type="checkbox" id="altLogoNhl" onchange="set('altLogoNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
-  <div class="row"><label id="t_wideNhl">Affichage avec chronomètre</label>
+  <div class="row"><label id="t_wideNhl">Chronomètre en direct</label>
     <label class="sw"><input type="checkbox" id="wideNhl" onchange="set('wideNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
   <div class="row"><label id="t_liveNhl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNhl" onchange="set('liveNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
+  <div class="row"><label id="t_goalAnim">Animation de but (favori)</label>
+    <span class="ra"><button class="pill p-ton" id="t_testNhl" onclick="set('testGoal',0)">Tester</button>
+    <label class="sw"><input type="checkbox" id="goalAnim" onchange="set('goalAnim',this.checked?1:0)"><span class="sl"></span></label></span>
+  </div>
   <div class="row"><label id="t_standNhl">Afficher classement</label>
     <label class="sw"><input type="checkbox" id="showStNhl" onchange="set('showStNhl',this.checked?1:0)"><span class="sl"></span></label>
-  </div>
-</div>
-
-<div class="card">
-  <div class="sec" id="t_secAnim">Animations et indicateurs</div>
-  <div class="row"><label id="t_goalAnim">Animation de but / touché (favori)</label>
-    <label class="sw"><input type="checkbox" id="goalAnim" onchange="set('goalAnim',this.checked?1:0)"><span class="sl"></span></label>
-  </div>
-  <div class="row"><label id="t_situation">Indicateurs AN/PP (LNH) et possession (NFL)</label>
-    <label class="sw"><input type="checkbox" id="situation" onchange="set('situation',this.checked?1:0)"><span class="sl"></span></label>
-  </div>
-  <div class="row"><label id="t_testAnim">Tester l'animation</label>
-    <span><button class="pill p-ton" id="t_testNhl" onclick="set('testGoal',0)">LNH</button>
-    <button class="pill p-ton" id="t_testNfl" onclick="set('testGoal',1)">NFL</button></span>
   </div>
 </div>
 
@@ -173,6 +164,10 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <div class="row"><label id="t_standNfl">Afficher classement</label>
     <label class="sw"><input type="checkbox" id="showStNfl" onchange="set('showStNfl',this.checked?1:0)"><span class="sl"></span></label>
+  </div>
+  <div class="row"><label id="t_tdAnim">Animation de touché (favori)</label>
+    <span class="ra"><button class="pill p-ton" id="t_testNfl" onclick="set('testGoal',1)">Tester</button>
+    <label class="sw"><input type="checkbox" id="tdAnim" onchange="set('tdAnim',this.checked?1:0)"><span class="sl"></span></label></span>
   </div>
 </div>
 
@@ -359,7 +354,7 @@ const TR={
   t_wx:["Afficher Horloge et Météo","Show Clock & Weather"],
   t_wxcity:["Ville de la météo","Weather city"],
   t_wildcard:["Classement meilleur 2e","Wild Card Standings"],
-  t_wcNhl:["Course aux séries","Playoff Race"],
+  t_wcNhl:["Classement meilleur 2e","Wild Card Standings"],
   t_standNhl:["Afficher classement","Show standings"],
   t_standMlb:["Afficher classement","Show standings"],
   t_standNfl:["Afficher classement","Show standings"],
@@ -370,13 +365,11 @@ const TR={
   t_favNhl:["Équipe favorite","Favorite team"],
   t_spMlb:["MLB","MLB"],
   t_spNhl:["LNH","NHL"],
-  t_wideNhl:["Affichage avec chronomètre","Clock display"],
-  t_secAnim:["Animations et indicateurs","Animations and indicators"],
-  t_goalAnim:["Animation de but / touché (favori)","Goal / touchdown animation (favorite)"],
-  t_situation:["Indicateurs AN/PP (LNH) et possession (NFL)","PP (NHL) and possession (NFL) indicators"],
-  t_testAnim:["Tester l'animation","Test the animation"],
-  t_testNhl:["LNH","NHL"],
-  t_testNfl:["NFL","NFL"],
+  t_wideNhl:["Chronomètre en direct","Live Clock"],
+  t_goalAnim:["Animation de but (favori)","Goal animation (favorite)"],
+  t_tdAnim:["Animation de touché (favori)","Touchdown animation (favorite)"],
+  t_testNhl:["Tester","Test"],
+  t_testNfl:["Tester","Test"],
   t_rkCfp:["Classement CFP (sinon AP)","CFP ranking (otherwise AP)"],
   t_spNfl:["NFL","NFL"],
   t_liveNfl:["Matchs en direct seulement","Live games only"],
@@ -481,7 +474,7 @@ function applyLang(){
 }
 function setLang(l){ lang=l; applyLang(); set('lang',l); }
 
-function set(k,v){fetch('/api/set?'+k+'='+v)}
+function set(k,v){fetch('/api/set?'+k+'='+v+'&_='+Date.now(),{cache:'no-store'})}
 function wxStatusTxt(s){
   const st=s.wxStat|0;
   if(st==1) return lang==0?'Recherche…':'Searching…';
@@ -575,7 +568,7 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   if(typeof s.wildcard!=='undefined') wildcard.checked=s.wildcard;
   if(typeof s.wcNhl!=='undefined') wcNhl.checked=s.wcNhl;
   spMlb.checked=s.spMlb;spNhl.checked=s.spNhl;altLogoNhl.checked=s.altLogoNhl;
-  spNfl.checked=s.spNfl;liveNfl.checked=s.liveNfl;liveNhl.checked=s.liveNhl;wideNhl.checked=!!s.wideNhl;if(typeof s.goalAnim!=='undefined'){goalAnim.checked=s.goalAnim;situation.checked=s.situation;}liveMlb.checked=s.liveMlb;
+  spNfl.checked=s.spNfl;liveNfl.checked=s.liveNfl;liveNhl.checked=s.liveNhl;wideNhl.checked=!!s.wideNhl;if(typeof s.goalAnim!=='undefined'){goalAnim.checked=s.goalAnim;tdAnim.checked=s.tdAnim;}liveMlb.checked=s.liveMlb;
   showStMlb.checked=s.showStMlb;showStNhl.checked=s.showStNhl;showStNfl.checked=s.showStNfl;
   if(typeof s.spPwhl!=='undefined'){ spPwhl.checked=s.spPwhl; livePwhl.checked=s.livePwhl; }
   if(typeof s.spNba!=='undefined'){ spNba.checked=s.spNba; liveNba.checked=s.liveNba; showStNba.checked=s.showStNba; }

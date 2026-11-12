@@ -211,8 +211,9 @@ bool     cfgSportMLB     = true;  // MLB actif
 bool     cfgSportNHL     = true;  // NHL actif
 char     cfgFavTeamNHL[4] = "";    // abreviation NHL favorite ; "" = aucun (choisi dans la web UI)
 bool     cfgAltLogoNHL   = false; // true = utilise logos_alt_nhl.h au lieu de logos_nhl.h (quand disponible)
-bool     cfgGoalAnim     = true;  // animation plein ecran quand le favori LNH marque / quand le favori NFL marque (>= 3 pts)
-bool     cfgSituation    = true;  // indicateurs AN/PP (LNH) et possession du ballon (NFL)
+bool     cfgGoalAnimNHL  = true;  // animation plein ecran quand le favori LNH marque
+bool     cfgGoalAnimNFL  = true;  // animation plein ecran quand le favori NFL marque (>= 3 pts)
+// Les indicateurs AN/PP (LNH) et possession (NFL) sont toujours actifs (plus de reglage).
 
 // ----- Sports ajoutes : PWHL / LPHF, NBA, NCAA football -----
 bool     cfgWideNHL      = false; // "Affichage avec chronometre" : tout match NHL en direct au format 2 panneaux (comme le favori)
@@ -270,8 +271,8 @@ void loadCfg() {
   cfgSportNHL     = prefs.getBool("spNhl", true);
   cfgAltLogoNHL   = prefs.getBool("altLogoNhl", false);
   cfgWideNHL      = prefs.getBool("wideNhl", false);
-  cfgGoalAnim     = prefs.getBool("goalAnim", true);
-  cfgSituation    = prefs.getBool("situation", true);
+  cfgGoalAnimNHL  = prefs.getBool("goalAnim", true);              // ancienne cle commune : garde le choix existant
+  cfgGoalAnimNFL  = prefs.getBool("tdAnim", cfgGoalAnimNHL);
   cfgRankCFP      = prefs.getBool("rkCfp", false);
   cfgSportPWHL    = prefs.getBool("spPwhl", false);
   cfgLiveOnlyPWHL = prefs.getBool("livePwhl", false);
@@ -322,8 +323,8 @@ void saveCfg() {
   prefs.putBool("spNhl", cfgSportNHL);
   prefs.putBool("altLogoNhl", cfgAltLogoNHL);
   prefs.putBool("wideNhl", cfgWideNHL);
-  prefs.putBool("goalAnim", cfgGoalAnim);
-  prefs.putBool("situation", cfgSituation);
+  prefs.putBool("goalAnim", cfgGoalAnimNHL);
+  prefs.putBool("tdAnim", cfgGoalAnimNFL);
   prefs.putBool("rkCfp", cfgRankCFP);
   prefs.putBool("spPwhl", cfgSportPWHL);
   prefs.putBool("livePwhl", cfgLiveOnlyPWHL);
@@ -439,7 +440,7 @@ bool ncaaFavActive(int k) {
 bool ncaaFetched = false;   // au moins un cycle de fetch termine (evite un "aucun match" au demarrage)
 unsigned long lastFetchNCAA = 0, lastStandNCAA = 0;
 // ---- Animation de but/touche + indicateurs AN/PP (LNH) et possession (NFL) ----
-// (cfgGoalAnim / cfgSituation sont declares plus haut, avec les autres reglages cfg*, avant loadCfg().)
+// (cfgGoalAnimNHL / cfgGoalAnimNFL sont declares plus haut, avec les autres reglages cfg*, avant loadCfg().)
 struct GoalReq { volatile bool pending; uint8_t sport; uint8_t kind; char abbr[5]; };
 GoalReq goalReq = {false, 0, 0, ""};   // ecrit par netTask (ou la web UI), consomme par loop() ; sport 0 = LNH, 1 = NFL ; kind NFL : 0 touche, 1 placement
 // Situation de jeu LNH (derniere valeur connue par match) : pp 0 = egalite, 1 = visiteur en AN, 2 = local en AN.

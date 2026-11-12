@@ -42,8 +42,8 @@ void handleState() {
   j += ",\"altLogoNhl\":" + String(cfgAltLogoNHL ? "true" : "false");
   j += ",\"gamesNhl\":" + String(gameCountNHL);
   j += ",\"wideNhl\":" + String(cfgWideNHL ? "true" : "false");
-  j += ",\"goalAnim\":" + String(cfgGoalAnim ? "true" : "false");
-  j += ",\"situation\":" + String(cfgSituation ? "true" : "false");
+  j += ",\"goalAnim\":" + String(cfgGoalAnimNHL ? "true" : "false");
+  j += ",\"tdAnim\":" + String(cfgGoalAnimNFL ? "true" : "false");
   j += ",\"rkCfp\":" + String(cfgRankCFP ? "true" : "false");
   j += ",\"top25Poll\":\"" + String(top25Type) + "\"";
   j += ",\"spPwhl\":" + String(cfgSportPWHL ? "true" : "false");
@@ -106,7 +106,7 @@ void handleSet() {
   if (server.hasArg("showStMlb")) { cfgShowStandMLB = server.arg("showStMlb").toInt() == 1; dirty = true; }
   if (server.hasArg("showStNhl")) { cfgShowStandNHL = server.arg("showStNhl").toInt() == 1; dirty = true; }
   if (server.hasArg("showStNfl")) { cfgShowStandNFL = server.arg("showStNfl").toInt() == 1; dirty = true; }
-  if (server.hasArg("spNfl")) { cfgSportNFL = server.arg("spNfl").toInt() == 1; dirty = true; if (cfgSportNFL) lastFetchNFL = 0; }
+  if (server.hasArg("spNfl")) { cfgSportNFL = server.arg("spNfl").toInt() == 1; dirty = true; if (cfgSportNFL) { lastFetchNFL = millis() - FETCH_MS_SLOW - 1; lastStandNFL = millis() - STAND_MS - 1; } }
   if (server.hasArg("liveNfl")) { cfgLiveOnlyNFL = server.arg("liveNfl").toInt() == 1; buildRotationNFL(); dirty = true; }
   if (server.hasArg("favNfl")) {
     String fk = server.arg("favNfl");
@@ -115,8 +115,8 @@ void handleSet() {
     buildRotationNFL();
   }
   if (server.hasArg("lang")) { cfgLang = server.arg("lang").toInt() == 1 ? 1 : 0; dirty = true; }
-  if (server.hasArg("spMlb")) { cfgSportMLB = server.arg("spMlb").toInt() == 1; dirty = true; }
-  if (server.hasArg("spNhl")) { cfgSportNHL = server.arg("spNhl").toInt() == 1; dirty = true; if (cfgSportNHL) { lastFetchNHL = 0; lastStandNHL = 0; } }
+  if (server.hasArg("spMlb")) { cfgSportMLB = server.arg("spMlb").toInt() == 1; dirty = true; if (cfgSportMLB) { lastFetch = millis() - FETCH_MS_SLOW - 1; lastStand = millis() - STAND_MS - 1; } }
+  if (server.hasArg("spNhl")) { cfgSportNHL = server.arg("spNhl").toInt() == 1; dirty = true; if (cfgSportNHL) { lastFetchNHL = millis() - FETCH_MS_SLOW - 1; lastStandNHL = millis() - STAND_MS - 1; } }
   if (server.hasArg("altLogoNhl")) { cfgAltLogoNHL = server.arg("altLogoNhl").toInt() == 1; dirty = true; }
   if (server.hasArg("favNhl")) {
     String fn = server.arg("favNhl");
@@ -125,14 +125,15 @@ void handleSet() {
     buildRotationNHL();
   }
   if (server.hasArg("wideNhl")) { cfgWideNHL = server.arg("wideNhl").toInt() == 1; dirty = true; }
-  if (server.hasArg("goalAnim"))  { cfgGoalAnim  = server.arg("goalAnim").toInt() == 1; }
-  if (server.hasArg("situation")) { cfgSituation = server.arg("situation").toInt() == 1; dirty = true; }
+  if (server.hasArg("goalAnim")) { cfgGoalAnimNHL = server.arg("goalAnim").toInt() == 1; }
+  if (server.hasArg("tdAnim"))   { cfgGoalAnimNFL = server.arg("tdAnim").toInt() == 1; }
   if (server.hasArg("testGoal")) {   // bouton "Tester" de la web UI : 0 = LNH, 1 = NFL touche, 2 = NFL placement (equipe favorite, sinon une equipe par defaut)
     int t = server.arg("testGoal").toInt();
     const char* fav = (t == 0) ? cfgFavTeamNHL : cfgFavTeamNFL;
     strncpy(goalReq.abbr, fav[0] ? fav : (t == 0 ? "MTL" : "KC"), 4); goalReq.abbr[4] = 0;
     goalReq.sport = (t == 0) ? 0 : 1; goalReq.kind = (t == 2) ? 1 : 0;
     goalReq.pending = true;
+    logAdd(String("Test animation ") + (t == 0 ? "LNH " : "NFL ") + goalReq.abbr);
   }
   if (server.hasArg("rkCfp")) { cfgRankCFP = server.arg("rkCfp").toInt() == 1; logAdd(String("ClassementNCAA: toggle -> ") + (cfgRankCFP ? "cfp" : "ap")); if (cfgSportNCAA) rankForceNCAA = true; }   // retelecharge le classement
   if (server.hasArg("spPwhl")) { cfgSportPWHL = server.arg("spPwhl").toInt() == 1; dirty = true; if (cfgSportPWHL) lastFetchPWHL = millis() - FETCH_MS_SLOW - 1; }
@@ -182,7 +183,7 @@ void handleSet() {
   dirty = true;
   xSemaphoreGive(dataMutex);
   // Sauvegarde NVS differee (voir flushCfg). Le bouton "Tester" seul ne change aucun reglage.
-  if (!(server.args() == 1 && server.hasArg("testGoal"))) { cfgSaveAt = millis(); cfgSavePending = true; }
+  if (!server.hasArg("testGoal")) { cfgSaveAt = millis(); cfgSavePending = true; }
   server.send(200, "text/plain", "ok");
 }
 
