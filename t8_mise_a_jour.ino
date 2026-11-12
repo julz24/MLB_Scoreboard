@@ -108,19 +108,39 @@ void fwInstall() {
   fwPanel(0);
 
   WiFiClientSecure client;
-  client.setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
   client.setTimeout(20000);
   client.setHandshakeTimeout(15);
   HTTPClient https;
   bool ok = false;
   const char* why = "echec inconnu";
   uint8_t whyCode = FW_E_INVALID;
-  if (https.begin(client, fwUrl)) {
-    https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);   // GitHub redirige vers son stockage
+  // GitHub redirige le telechargement vers son stockage (autre serveur). Les redirections sont
+  // suivies ici plutot que par HTTPClient : chaque nouvelle connexion doit rattacher le paquet
+  // de certificats (voir tlsVerified), ce que HTTPClient ne fait pas.
+  String url = fwUrl;
+  bool begun = false;
+  int code = -1;
+  for (int hop = 0; hop < 5; hop++) {
+    tlsVerified(client);
+    if (!https.begin(client, url)) break;
+    begun = true;
+    https.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     https.setTimeout(20000);
     https.useHTTP10(true);
+    const char* hdrs[] = {"Location"};
+    https.collectHeaders(hdrs, 1);
     netStep("MAJ");
-    int code = https.GET();
+    code = https.GET();
+    if (code < 0) logAdd("MAJ: telechargement HTTP " + String(code) + " (" + HTTPClient::errorToString(code) + ")" + tlsError(client));
+    if (code != 301 && code != 302 && code != 303 && code != 307 && code != 308) break;
+    String loc = https.header("Location");
+    https.end();
+    client.stop();
+    begun = false;
+    if (!loc.startsWith("https://")) { code = -1; break; }
+    url = loc;
+  }
+  if (begun) {
     int len = https.getSize();
     if (code != 200) { why = "telechargement refuse"; whyCode = FW_E_REFUSED; }
     else if (len <= 0 || (fwSize > 0 && (uint32_t)len != fwSize)) { why = "taille inattendue"; whyCode = FW_E_SIZE; }

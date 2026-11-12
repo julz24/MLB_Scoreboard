@@ -7,7 +7,23 @@
 // Le watchdog n'est surveille que sur netTask : pendant un long telechargement
 // on le "nourrit" regulierement (le 2 panneaux avait un temoin RTC detaille ;
 // ici un simple reset suffit - voir netTask).
-static inline void netStep(const char*) { esp_task_wdt_reset(); }
+// Seulement si la tache courante est inscrite au watchdog (netTask) : les fetchs faits pendant
+// setup() tournent dans la tache loop, non inscrite ("task_wdt: task not found" sinon).
+static inline void netStep(const char*) { if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset(); }
+
+// Le core ESP32 (3.3.x) remet tout le contexte TLS a zero dans stop(), y compris le lien vers le
+// paquet de certificats : il faut le rattacher avant CHAQUE connexion verifiee, sinon la
+// verification du certificat echoue (HTTP -1 "connection refused").
+static void tlsVerified(WiFiClientSecure& c) {
+  c.setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
+}
+
+// Texte de la derniere erreur TLS du client (pour les logs).
+static String tlsError(WiFiClientSecure& c) {
+  char b[100] = "";
+  int e = c.lastError(b, sizeof(b));
+  return e ? String(" [TLS ") + e + " " + b + "]" : String("");
+}
 
 // ====================== TELECHARGEMENT HTTPS (commun a tous les fetchs) ======================
 // Telecharge une reponse HTTPS dans un tampon PSRAM (a liberer avec free()).
@@ -19,7 +35,7 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
   outLen = 0;
   netStep(tag);
   WiFiClientSecure client;
-  if (verifyTls) client.setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
+  if (verifyTls) tlsVerified(client);
   else           client.setInsecure();
   client.setTimeout(10000);
   client.setHandshakeTimeout(10);
@@ -31,8 +47,9 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
 
   HTTPClient https;
   int code = 0, len = 0;
-  // 2 essais : si la connexion ouverte ci-dessus a ete fermee avant la requete (code < 0,
-  // vu avec le serveur des mises a jour en TLS verifie), HTTPClient rouvre la sienne.
+  // 2 essais : si la connexion ouverte ci-dessus a ete fermee avant la requete (code < 0),
+  // HTTPClient rouvre la sienne (paquet de certificats rattache, voir tlsVerified).
+  if (!client.connected()) logAdd(String(tag) + ": connexion deja fermee avant la requete" + tlsError(client));
   for (int essai = 1; essai <= 2; essai++) {
     if (!https.begin(client, url)) { logAdd(String(tag) + ": begin echec"); client.stop(); return nullptr; }
     https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
@@ -43,10 +60,11 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
     code = https.GET();
     len = https.getSize();
     logAdd(String(tag) + ": GET " + String(millis() - tGet) + "ms, HTTP " + String(code) + ", taille " + String(len) +
-           (code < 0 ? " (" + HTTPClient::errorToString(code) + ")" : String("")));
+           (code < 0 ? " (" + HTTPClient::errorToString(code) + ")" + tlsError(client) : String("")));
     if (code >= 0 || essai == 2) break;
     https.end();
     client.stop();
+    if (verifyTls) tlsVerified(client);
     netStep(tag);
     logAdd(String(tag) + ": nouvel essai");
   }
