@@ -30,15 +30,26 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
   netStep(tag);
 
   HTTPClient https;
-  if (!https.begin(client, url)) { logAdd(String(tag) + ": begin echec"); client.stop(); return nullptr; }
-  https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-  https.setTimeout(15000);
-  https.setConnectTimeout(5000);
-  https.useHTTP10(true);
-  unsigned long tGet = millis();
-  int code = https.GET();
-  int len = https.getSize();
-  logAdd(String(tag) + ": GET " + String(millis() - tGet) + "ms, HTTP " + String(code) + ", taille " + String(len));
+  int code = 0, len = 0;
+  // 2 essais : si la connexion ouverte ci-dessus a ete fermee avant la requete (code < 0,
+  // vu avec le serveur des mises a jour en TLS verifie), HTTPClient rouvre la sienne.
+  for (int essai = 1; essai <= 2; essai++) {
+    if (!https.begin(client, url)) { logAdd(String(tag) + ": begin echec"); client.stop(); return nullptr; }
+    https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    https.setTimeout(15000);
+    https.setConnectTimeout(5000);
+    https.useHTTP10(true);
+    unsigned long tGet = millis();
+    code = https.GET();
+    len = https.getSize();
+    logAdd(String(tag) + ": GET " + String(millis() - tGet) + "ms, HTTP " + String(code) + ", taille " + String(len) +
+           (code < 0 ? " (" + HTTPClient::errorToString(code) + ")" : String("")));
+    if (code >= 0 || essai == 2) break;
+    https.end();
+    client.stop();
+    netStep(tag);
+    logAdd(String(tag) + ": nouvel essai");
+  }
   if (code != 200) { https.end(); client.stop(); return nullptr; }
 
   if (len <= 0 || len > cap) len = cap;
