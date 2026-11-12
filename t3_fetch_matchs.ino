@@ -39,17 +39,22 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
   else           client.setInsecure();
   client.setTimeout(10000);
   client.setHandshakeTimeout(10);
-  unsigned long tConn = millis();
-  bool connOk = client.connect(host, 443, 5000);
-  logAdd(String(tag) + ": connexion " + String(connOk ? "ok" : "ECHEC") + " en " + String(millis() - tConn) + "ms, RSSI " + String(WiFi.RSSI()) + "dBm");
-  if (!connOk) return nullptr;
-  netStep(tag);
+  // Connexion ouverte d'avance (mesure du temps de connexion dans les logs). Pas en TLS verifie :
+  // HTTPClient la jugeait fermee et la refaisait sans paquet de certificats ("No CA Chain is
+  // set") ; on le laisse alors ouvrir lui-meme la connexion au GET.
+  if (!verifyTls) {
+    unsigned long tConn = millis();
+    bool connOk = client.connect(host, 443, 5000);
+    logAdd(String(tag) + ": connexion " + String(connOk ? "ok" : "ECHEC") + " en " + String(millis() - tConn) + "ms, RSSI " + String(WiFi.RSSI()) + "dBm");
+    if (!connOk) return nullptr;
+    netStep(tag);
+  }
 
   HTTPClient https;
   int code = 0, len = 0;
   // 2 essais : si la connexion ouverte ci-dessus a ete fermee avant la requete (code < 0),
   // HTTPClient rouvre la sienne (paquet de certificats rattache, voir tlsVerified).
-  if (!client.connected()) logAdd(String(tag) + ": connexion deja fermee avant la requete" + tlsError(client));
+  if (!verifyTls && !client.connected()) logAdd(String(tag) + ": connexion deja fermee avant la requete" + tlsError(client));
   for (int essai = 1; essai <= 2; essai++) {
     if (!https.begin(client, url)) { logAdd(String(tag) + ": begin echec"); client.stop(); return nullptr; }
     https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
