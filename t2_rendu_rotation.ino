@@ -256,7 +256,7 @@ void renderUnified() {
 
 // ====================== RENDU GLOBAL (dispatch multi-sport) ======================
 bool render() {
-  if (!cfgScreenOn) { dma->fillScreen(0); return true; }   // "eteint" applique correctement, pas un echec
+  if (!screenOn()) { dma->fillScreen(0); return true; }   // "eteint" applique correctement, pas un echec
 
   // Attente BORNEE du mutex (100ms max). Si les donnees sont momentanement
   // verrouillees par netTask, on saute ce cycle de rendu (l'ecran garde son

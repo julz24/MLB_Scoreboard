@@ -53,6 +53,13 @@ select,input[type=text]{width:58%;font-size:15px;border-radius:12px;border:1px s
 .seg button{border:none;background:transparent;color:var(--txt);font-size:14px;font-weight:500;padding:8px 18px;cursor:pointer}
 .seg button+button{border-left:1px solid #8a9199}
 .seg button.on{background:var(--tonal);color:var(--pri)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:4px 0 6px}
+.days button{width:100%;max-width:42px;aspect-ratio:1;justify-self:center;padding:0;border-radius:50%;border:1px solid #8a9199;
+  background:transparent;color:var(--txt);font-size:14px;font-weight:500;cursor:pointer}
+.days button.on{background:var(--pri);border-color:var(--pri);color:#003258}
+.chip{border:1px solid #8a9199;border-radius:999px;background:transparent;color:var(--txt);font-size:14px;font-weight:500;padding:6px 16px;cursor:pointer}
+.chip.on{background:var(--tonal);color:var(--pri)}
+select.tm{width:auto;padding:8px 10px}
 /* Logos des ligues : PNG 2x rendus depuis les SVG officiels, integres (aucun acces Internet requis) */
 .lh{display:flex;align-items:center;gap:14px;margin-bottom:6px}
 .lt{width:44px;height:44px;border-radius:12px;flex:none;background:#eef1f5 no-repeat center;background-size:contain;background-origin:content-box;padding:6px}
@@ -282,6 +289,21 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
 </div>
 
 <div class="card">
+  <div class="row"><label id="t_sched">Cédule</label>
+    <label class="sw"><input type="checkbox" id="schOn" onchange="set('schOn',this.checked?1:0);schHint()"><span class="sl"></span></label>
+  </div>
+  <div class="row"><label id="t_schDays">Jours</label><button class="chip" id="schAll" onclick="schAllDays()">Tous</button></div>
+  <div class="days" id="schDaysBox"></div>
+  <div class="row"><label id="t_schOff">Éteindre à</label>
+    <span class="ra"><select class="tm" id="schOffH" onchange="schTime('schOff')"></select><select class="tm" id="schOffM" onchange="schTime('schOff')"></select></span>
+  </div>
+  <div class="row"><label id="t_schOnT">Allumer à</label>
+    <span class="ra"><select class="tm" id="schOnTH" onchange="schTime('schOnT')"></select><select class="tm" id="schOnTM" onchange="schTime('schOnT')"></select></span>
+  </div>
+  <div class="hint" id="schInfo"></div>
+</div>
+
+<div class="card">
   <h2 id="t_sys">Système</h2>
   <div class="kv">
     <div class="k" id="t_ip">Adresse IP</div><div id="sysIp">-</div>
@@ -351,6 +373,11 @@ const TR={
   t_lang:["Langue","Language"],
   t_bright:["Luminosité","Brightness"],
   t_screen:["Écran allumé","Screen on"],
+  t_sched:["Cédule","Schedule"],
+  t_schDays:["Jours","Days"],
+  schAll:["Tous","All"],
+  t_schOff:["Éteindre à","Turn off at"],
+  t_schOnT:["Allumer à","Turn on at"],
   t_wx:["Afficher Horloge et Météo","Show Clock & Weather"],
   t_wxcity:["Ville de la météo","Weather city"],
   t_wildcard:["Classement meilleur 2e","Wild Card Standings"],
@@ -471,10 +498,47 @@ function applyLang(){
   logsBtn.textContent = logsOpen ? TRX.logsHide[lang] : TRX.logsShow[lang];
   hdr.textContent = TRX[curView()||'home'][lang];
   if(lastState) applyDynamic(lastState);   // re-traduit les parties dynamiques
+  schShow();
 }
 function setLang(l){ lang=l; applyLang(); set('lang',l); }
 
 function set(k,v){fetch('/api/set?'+k+'='+v+'&_='+Date.now(),{cache:'no-store'})}
+
+// ---- Cedule : jours en bits (0 = dimanche), heures en minutes depuis minuit ----
+const SCH_DAYS=[['D','S'],['L','M'],['M','T'],['M','W'],['J','T'],['V','F'],['S','S']];
+const SCH_NAMES=[['dimanche','Sunday'],['lundi','Monday'],['mardi','Tuesday'],['mercredi','Wednesday'],['jeudi','Thursday'],['vendredi','Friday'],['samedi','Saturday']];
+let schDays=127;
+function schBuild(){
+  schDaysBox.innerHTML=SCH_DAYS.map((d,i)=>'<button id="schD'+i+'" onclick="schDay('+i+')"></button>').join('');
+  const hrs=[...Array(24).keys()].map(h=>'<option value="'+h+'">'+h+'h</option>').join('');
+  const mns='<option value="0">00m</option><option value="30">30m</option>';
+  schOffH.innerHTML=hrs; schOnTH.innerHTML=hrs; schOffM.innerHTML=mns; schOnTM.innerHTML=mns;
+}
+function schShow(){
+  for(let i=0;i<7;i++){ const b=document.getElementById('schD'+i); b.textContent=SCH_DAYS[i][lang];
+    b.title=SCH_NAMES[i][lang]; b.classList.toggle('on',!!(schDays&(1<<i))); }
+  schAll.classList.toggle('on',schDays==127);
+  schHint();
+}
+function schVal(k){ return (+document.getElementById(k+'H').value)*60+(+document.getElementById(k+'M').value); }
+function schFmt(m){ return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'); }
+function schHint(){
+  const off=schVal('schOff'), on=schVal('schOnT');
+  let t;
+  if(!schOn.checked) t=lang==0?'Cédule désactivée.':'Schedule off.';
+  else if(!schDays) t=lang==0?'Choisissez au moins un jour.':'Pick at least one day.';
+  else if(off==on) t=lang==0?'Choisissez deux heures différentes.':'Pick two different times.';
+  else t=(lang==0?'Écran éteint de ':'Screen off from ')+schFmt(off)+(lang==0?' à ':' to ')+schFmt(on)+
+         (on<off?(lang==0?' le lendemain':' the next day'):'')+(lang==0?', à partir des jours choisis.':', starting on the chosen days.');
+  schInfo.textContent=t;
+}
+function schDay(i){ schDays^=(1<<i); schShow(); set('schDays',schDays); }
+function schAllDays(){ schDays=(schDays==127)?0:127; schShow(); set('schDays',schDays); }
+function schTime(k){ set(k,schVal(k)); schHint(); }
+function schSel(k,m){ const h=document.getElementById(k+'H'), mm=document.getElementById(k+'M');
+  if(document.activeElement!==h) h.value=String(Math.floor(m/60)); if(document.activeElement!==mm) mm.value=String(m%60); }
+function schApply(s){ if(typeof s.schOn==='undefined') return;
+  schOn.checked=s.schOn; schDays=s.schDays; schSel('schOff',s.schOff); schSel('schOnT',s.schOnT); schShow(); }
 function wxStatusTxt(s){
   const st=s.wxStat|0;
   if(st==1) return lang==0?'Recherche…':'Searching…';
@@ -574,6 +638,7 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   if(typeof s.spNba!=='undefined'){ spNba.checked=s.spNba; liveNba.checked=s.liveNba; showStNba.checked=s.showStNba; }
   if(typeof s.spNcaa!=='undefined'){ spNcaa.checked=s.spNcaa; liveNcaa.checked=s.liveNcaa; showStNcaa.checked=s.showStNcaa; rkCfp.checked=!!s.rkCfp; cfAcc.checked=s.cfAcc; cfB12.checked=s.cfB12; cfB10.checked=s.cfB10; cfSec.checked=s.cfSec; cfP12.checked=s.cfP12; }
   applyDynamic(s);
+  schApply(s);
   showWx(s);
   applyLang();
 })}
@@ -633,7 +698,7 @@ function toggleLogs(){
   else if(logsTimer){ clearInterval(logsTimer); logsTimer=null; }
 }
 showView();
-load();setInterval(load,5000);
+schBuild();load();setInterval(load,5000);
 </script></body></html>
 )HTML";
 

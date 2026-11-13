@@ -1087,7 +1087,7 @@ static bool animTick(unsigned long now) {
   if (!anim.active && goalReq.pending) {
     goalReq.pending = false;
     bool on = goalReq.sport == 0 ? cfgGoalAnimNHL : cfgGoalAnimNFL;
-    if (on && cfgScreenOn) { animStart(); now = millis(); }   // 'now' date d'avant animStart : sinon now - t0 deborde et l'animation s'arrete aussitot
+    if (on && screenOn()) { animStart(); now = millis(); }   // 'now' date d'avant animStart : sinon now - t0 deborde et l'animation s'arrete aussitot
     else logAdd(String("Animation ignoree : ") + (!on ? "desactivee" : "ecran eteint"));
   }
   if (!anim.active) return false;
@@ -1429,7 +1429,7 @@ void drawWeatherClock(int px) {
 // l'animation pluie/neige : evite le scintillement plein-ecran, confine le
 // redessin repete a la seule zone qui change reellement.
 void renderWeatherOnly() {
-  if (!cfgScreenOn || wxPanelCount == 0) return;
+  if (!screenOn() || wxPanelCount == 0) return;
   if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
   for (int i = 0; i < wxPanelCount; i++) {
     int px = wxPanels[i];
@@ -1445,7 +1445,7 @@ void renderWeatherOnly() {
 // entracte ou si le chrono est arrete (clock.running=false) ; a chaque fetch
 // l'API recale la valeur.
 void tickNhlClock() {
-  if (!cfgScreenOn || nhlClockPx < 0) return;
+  if (!screenOn() || nhlClockPx < 0) return;
   if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
   if (nhlClockIdx >= 0 && nhlClockIdx < gameCountNHL) {
     GameNHL& g = gamesNHL[nhlClockIdx];

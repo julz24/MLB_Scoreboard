@@ -15,7 +15,11 @@ void handleState() {
   j += ",\"fav\":" + String(cfgFavTeam);
   j += ",\"liveMlb\":" + String(cfgLiveOnlyMLB ? "true" : "false");
   j += ",\"liveNhl\":" + String(cfgLiveOnlyNHL ? "true" : "false");
-  j += ",\"screen\":" + String(cfgScreenOn ? "true" : "false");
+  j += ",\"screen\":" + String(screenOn() ? "true" : "false");
+  j += ",\"schOn\":" + String(cfgSchedOn ? "true" : "false");
+  j += ",\"schDays\":" + String(cfgSchedDays);
+  j += ",\"schOff\":" + String(cfgSchedOff);
+  j += ",\"schOnT\":" + String(cfgSchedOnT);
   j += ",\"wxforce\":" + String(cfgForceWeather ? "true" : "false");
   j += ",\"wildcard\":" + String(cfgWildCard ? "true" : "false");
   j += ",\"wcNhl\":" + String(cfgWildCardNHL ? "true" : "false");
@@ -99,7 +103,15 @@ void handleSet() {
   if (server.hasArg("fav"))    { cfgFavTeam = server.arg("fav").toInt(); buildRotation(); }
   if (server.hasArg("liveMlb")) { cfgLiveOnlyMLB = server.arg("liveMlb").toInt() == 1; buildRotation(); }
   if (server.hasArg("liveNhl")) { cfgLiveOnlyNHL = server.arg("liveNhl").toInt() == 1; buildRotationNHL(); }
-  if (server.hasArg("screen")) { cfgScreenOn = server.arg("screen").toInt() == 1; }
+  if (server.hasArg("screen")) {   // allumer a la main annule l'extinction de la cedule jusqu'a la prochaine plage
+    cfgScreenOn = server.arg("screen").toInt() == 1;
+    if (cfgScreenOn) schedBlank = false;
+    dirty = true;
+  }
+  if (server.hasArg("schOn"))   { cfgSchedOn = server.arg("schOn").toInt() == 1; schedReset = true; }
+  if (server.hasArg("schDays")) { cfgSchedDays = server.arg("schDays").toInt() & 0x7F; schedReset = true; }
+  if (server.hasArg("schOff"))  { int m = server.arg("schOff").toInt(); if (m >= 0 && m < 1440 && m % 30 == 0) cfgSchedOff = m; schedReset = true; }
+  if (server.hasArg("schOnT"))  { int m = server.arg("schOnT").toInt(); if (m >= 0 && m < 1440 && m % 30 == 0) cfgSchedOnT = m; schedReset = true; }
   if (server.hasArg("wxforce")) { cfgForceWeather = server.arg("wxforce").toInt() == 1; dirty = true; }
   if (server.hasArg("wildcard")) { cfgWildCard = server.arg("wildcard").toInt() == 1; dirty = true; }
   if (server.hasArg("wcNhl")) { cfgWildCardNHL = server.arg("wcNhl").toInt() == 1; dirty = true; }

@@ -197,6 +197,16 @@ int      cfgFavTeam     = 0;      // aucun favori MLB par defaut (choisi dans la
 bool     cfgLiveOnlyMLB = false;  // MLB : rotation = matchs live seulement
 bool     cfgLiveOnlyNHL = false;  // NHL : idem, independant du MLB
 bool     cfgScreenOn    = true;
+// Cedule : ecran eteint de cfgSchedOff a cfgSchedOnT (minutes depuis minuit, par pas de 30 min),
+// a partir de chaque jour coche (une plage 23h -> 7h appartient au jour ou elle commence).
+bool     cfgSchedOn     = false;
+uint8_t  cfgSchedDays   = 0x7F;      // bit 0 = dimanche ... bit 6 = samedi
+uint16_t cfgSchedOff    = 23 * 60;   // heure d'extinction
+uint16_t cfgSchedOnT    = 7 * 60;    // heure d'allumage
+bool     schedBlank     = false;     // ecran eteint par la cedule (jamais enregistre)
+bool     schedReset     = true;      // reevaluer la cedule tout de suite (demarrage, reglage modifie)
+// Ecran reellement allume : interrupteur de la page web ET hors de la plage de la cedule.
+inline bool screenOn() { return cfgScreenOn && !schedBlank; }
 bool     cfgForceWeather = true;  // horloge/meteo sur le dernier panneau (meme defaut que loadCfg)
 bool     cfgSportNFL     = false; // NFL active (off par defaut : hors-saison une bonne partie de l'annee)
 char     cfgFavTeamNFL[4] = "";   // abreviation NFL favorite ; "" = aucune
@@ -257,6 +267,12 @@ void loadCfg() {
   cfgLiveOnlyMLB  = prefs.getBool("liveMlb", false);
   cfgLiveOnlyNHL  = prefs.getBool("liveNhl", false);
   cfgScreenOn     = prefs.getBool("screen", true);
+  cfgSchedOn      = prefs.getBool("schOn", false);
+  cfgSchedDays    = prefs.getUChar("schDays", 0x7F) & 0x7F;
+  cfgSchedOff     = prefs.getUShort("schOff", 23 * 60);
+  if (cfgSchedOff >= 1440 || cfgSchedOff % 30) cfgSchedOff = 23 * 60;
+  cfgSchedOnT     = prefs.getUShort("schOnT", 7 * 60);
+  if (cfgSchedOnT >= 1440 || cfgSchedOnT % 30) cfgSchedOnT = 7 * 60;
   cfgForceWeather = prefs.getBool("wxforce", true);
   cfgWildCard     = prefs.getBool("wildcard", false);
   cfgWildCardNHL  = prefs.getBool("wcNhl", false);
@@ -309,6 +325,10 @@ void saveCfg() {
   prefs.putBool("liveMlb", cfgLiveOnlyMLB);
   prefs.putBool("liveNhl", cfgLiveOnlyNHL);
   prefs.putBool("screen", cfgScreenOn);
+  prefs.putBool("schOn", cfgSchedOn);
+  prefs.putUChar("schDays", cfgSchedDays);
+  prefs.putUShort("schOff", cfgSchedOff);
+  prefs.putUShort("schOnT", cfgSchedOnT);
   prefs.putBool("wxforce", cfgForceWeather);
   prefs.putBool("wildcard", cfgWildCard);
   prefs.putBool("wcNhl", cfgWildCardNHL);

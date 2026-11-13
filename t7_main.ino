@@ -349,6 +349,47 @@ void netTask(void* pv) {
 }
 
 // ====================== LOOP ======================
+// ====================== CEDULE (ecran eteint / allume) ======================
+// Vrai si l'heure locale t tombe dans une plage d'extinction (de cfgSchedOff a cfgSchedOnT,
+// commencant un jour coche). Calcul en minutes de la semaine : gere la nuit et samedi -> dimanche.
+static bool schedInWindow(const struct tm& t) {
+  if (!cfgSchedOn || !cfgSchedDays) return false;
+  int dur = ((int)cfgSchedOnT - (int)cfgSchedOff + 1440) % 1440;
+  if (dur == 0) return false;                      // meme heure pour eteindre et allumer : rien a faire
+  int w = t.tm_wday * 1440 + t.tm_hour * 60 + t.tm_min;
+  for (int d = 0; d < 7; d++) {
+    if (!(cfgSchedDays & (1 << d))) continue;
+    int start = d * 1440 + cfgSchedOff;
+    if ((w - start + 10080) % 10080 < dur) return true;
+  }
+  return false;
+}
+
+// On agit seulement au debut et a la fin d'une plage : l'ecran rallume a la main pendant
+// la plage reste allume jusqu'a la prochaine extinction prevue.
+static void scheduleTick(unsigned long now) {
+  static unsigned long last = 0;
+  static bool prevIn = false;
+  if (!schedReset && now - last < 5000) return;
+  last = now;
+  time_t tt = time(nullptr);
+  struct tm t; localtime_r(&tt, &t);
+  if (t.tm_year < 124) return;                     // heure pas encore recue (NTP)
+  bool in = schedInWindow(t);
+  if (schedReset) {                                // demarrage ou cedule modifiee : on applique l'etat actuel
+    schedReset = false;
+    if (in != schedBlank) {
+      schedBlank = in; dirty = true;
+      logAdd(in ? "Cedule : ecran eteint (plage en cours)" : "Cedule : ecran allume (hors plage)");
+    }
+  } else if (in != prevIn) {
+    schedBlank = in; dirty = true;
+    if (!in && !cfgScreenOn) { cfgScreenOn = true; cfgSaveAt = millis(); cfgSavePending = true; }   // "allumer" = allumer, meme si eteint a la main
+    logAdd(in ? "Cedule : ecran eteint" : "Cedule : ecran allume");
+  }
+  prevIn = in;
+}
+
 void loop() {
   // ----- Mode portail de configuration -----
   if (apMode) {
@@ -379,6 +420,7 @@ void loop() {
   if (cfgSavePending && millis() - cfgSaveAt >= CFG_SAVE_DELAY_MS) flushCfg();   // reglages de la web UI : 2,5 s apres le dernier changement
 
   unsigned long now = millis();
+  scheduleTick(now);
   if (animTick(now)) return;   // animation de but/touche en cours : elle a l'ecran pour elle seule (serveur web deja servi plus haut)
   if (now - lastRotate >= (unsigned long)cfgRotationSec * 1000) {
     lastRotate = now;
@@ -412,7 +454,7 @@ void loop() {
   {
     bool weatherVisible = cfgForceWeather || (rotCount < 3);
     int cat = wxValid ? wxCategory(wxCode, wxIsDay) : WX_CLOUD;
-    if (cfgScreenOn && weatherVisible && (cat == WX_RAIN || cat == WX_SNOW || cat == WX_SUN) &&
+    if (screenOn() && weatherVisible && (cat == WX_RAIN || cat == WX_SNOW || cat == WX_SUN) &&
         now - lastAnim >= 180) {
       lastAnim = now;
       animFrame++;
