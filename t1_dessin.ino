@@ -985,6 +985,7 @@ static void drawPossessionNFL(int px, int side) {
 struct AnimState {
   bool active;
   unsigned long t0, lastFrame;
+  uint16_t frames;             // images dessinees (diagnostic, voir le log de fin)
   int r, g, b;                 // couleur d'equipe (eclaircie si trop sombre)
   const uint16_t* logo;        // logo RGB565, 0 = transparent
   int logoSize;
@@ -1028,7 +1029,8 @@ static void animStart() {
   anim.mask->setCursor(x0, y0);
   anim.mask->print(txt);
   anim.tx0 = x0 - 2; anim.tx1 = x0 + tw + 1; anim.ty0 = y0 - 2; anim.ty1 = y0 + 24 + 1;
-  anim.t0 = millis(); anim.lastFrame = 0; anim.active = true;
+  anim.t0 = millis(); anim.lastFrame = 0; anim.frames = 0; anim.active = true;
+  logAdd(String("Animation ") + txt + " " + ab + " : debut");
 }
 
 static void animDrawFrame(unsigned long el) {
@@ -1043,7 +1045,10 @@ static void animDrawFrame(unsigned long el) {
   int lyTop = (H - ls) / 2;
   int lxL = 2, lxR = W - ls - 2;
 
-  for (int y = 0; y < H; y++) {
+  // Ordre de balayage des panneaux 1/16 : les lignes y et y+16 s'allument ensemble, on dessine donc
+  // chaque paire (y, y+16) a la suite pour que les deux moities de l'ecran changent en meme temps.
+  for (int yi = 0; yi < H; yi++) {
+    int y = (yi >> 1) + ((yi & 1) ? H / 2 : 0);
     for (int x = 0; x < W; x++) {
       int lvl;
       int d = (x + 2 * y - phase) & 31;
@@ -1082,18 +1087,19 @@ static bool animTick(unsigned long now) {
   if (!anim.active && goalReq.pending) {
     goalReq.pending = false;
     bool on = goalReq.sport == 0 ? cfgGoalAnimNHL : cfgGoalAnimNFL;
-    if (on && cfgScreenOn) animStart();
+    if (on && cfgScreenOn) { animStart(); now = millis(); }   // 'now' date d'avant animStart : sinon now - t0 deborde et l'animation s'arrete aussitot
     else logAdd(String("Animation ignoree : ") + (!on ? "desactivee" : "ecran eteint"));
   }
   if (!anim.active) return false;
   unsigned long el = now - anim.t0;
   if (el >= ANIM_MS) {
+    logAdd("Animation : fin (" + String(anim.frames) + " images en " + String(el) + " ms)");
     anim.active = false;
     delete anim.mask; anim.mask = nullptr;
     dirty = true;                               // retour a l'affichage normal (nouveau score compris)
     return false;
   }
-  if (now - anim.lastFrame >= 40) { anim.lastFrame = now; animDrawFrame(el); }
+  if (now - anim.lastFrame >= 40) { anim.lastFrame = now; animDrawFrame(el); anim.frames++; }
   return true;
 }
 
