@@ -188,12 +188,16 @@ void setup() {
 
   bootAnimStart();          // logos des 5 ligues qui defilent pendant le chargement
   delay(1500);
-  if (cfgSportMLB) fetchGames();
-  if (cfgSportNHL) fetchGamesNHL();
-  if (cfgSportNFL) fetchGamesNFL();
+  bool bootOkMlb = !cfgSportMLB || fetchGames();
+  bool bootOkNhl = !cfgSportNHL || fetchGamesNHL();
+  bool bootOkNfl = !cfgSportNFL || fetchGamesNFL();
   lastFetch = millis();
   lastFetchNHL = millis() - 5000;   // decale du fetch MLB (evite 2 handshakes TLS au meme instant, a chaque cycle)
   lastFetchNFL = millis() - 10000;  // decale de MLB et NHL, meme raison
+  // Echec au demarrage (WiFi faible) : netTask reessaie dans ~1 min au lieu de 15 (toujours decales).
+  if (!bootOkMlb) lastFetch    = millis() - FETCH_MS_SLOW + FETCH_RETRY_MS;
+  if (!bootOkNhl) lastFetchNHL = millis() - FETCH_MS_SLOW + FETCH_RETRY_MS + 5000;
+  if (!bootOkNfl) lastFetchNFL = millis() - FETCH_MS_SLOW + FETCH_RETRY_MS + 10000;
   lastRotate = millis();
   // 1ere meteo faite depuis loop(), ~5s apres le debut de la boucle (une
   // fois le serveur web deja actif), pour ne jamais retarder le boot.
@@ -283,27 +287,30 @@ void netTask(void* pv) {
 
     if (WiFi.status() == WL_CONNECTED && !otaActive) {   // aucun fetch pendant une OTA
       ensurePublicDns();   // le DHCP remet son DNS a chaque bail : on reimpose 1.1.1.1 avant les fetchs (sans effet si deja en place)
-      if (cfgSportMLB && now - lastFetch >= fetchInterval) { lastFetch = now; fetchGames(); }
+      // Apres un echec (WiFi faible, serveur lent), nouvel essai dans FETCH_RETRY_MS au lieu de l'intervalle
+      // complet : un echec au demarrage laissait le sport sans matchs pendant 15 min.
+      if (cfgSportMLB && now - lastFetch >= fetchInterval) { lastFetch = now; if (!fetchGames()) lastFetch = millis() - fetchInterval + FETCH_RETRY_MS; }
 
       unsigned long fetchIntervalNhl = nhlFavLive() ? FETCH_FAV_MS_NHL : (anyLiveGameNHL() ? FETCH_MS : FETCH_MS_SLOW);
-      if (cfgSportNHL && now - lastFetchNHL >= fetchIntervalNhl) { lastFetchNHL = now; fetchGamesNHL(); }
+      if (cfgSportNHL && now - lastFetchNHL >= fetchIntervalNhl) { lastFetchNHL = now; if (!fetchGamesNHL()) lastFetchNHL = millis() - fetchIntervalNhl + FETCH_RETRY_MS; }
       if (cfgSportNHL) nhlSituationStep(now);   // avantage numerique (play-by-play), un match a la fois
 
       bool nflFavLive = cfgFavTeamNFL[0] && favIdxNFL >= 0 && favIdxNFL < gameCountNFL && gamesNFL[favIdxNFL].state == 1;
       unsigned long fetchIntervalNfl = nflFavLive ? FETCH_FAV_MS_NFL : (anyLiveGameNFL() ? FETCH_MS : FETCH_MS_SLOW);
-      if (cfgSportNFL && now - lastFetchNFL >= fetchIntervalNfl) { lastFetchNFL = now; fetchGamesNFL(); }
+      if (cfgSportNFL && now - lastFetchNFL >= fetchIntervalNfl) { lastFetchNFL = now; if (!fetchGamesNFL()) lastFetchNFL = millis() - fetchIntervalNfl + FETCH_RETRY_MS; }
 
       unsigned long fetchIntervalNba = anyLiveGameNBA() ? FETCH_MS : FETCH_MS_SLOW;
-      if (cfgSportNBA && now - lastFetchNBA >= fetchIntervalNba) { lastFetchNBA = now; fetchGamesNBA(); }
+      if (cfgSportNBA && now - lastFetchNBA >= fetchIntervalNba) { lastFetchNBA = now; if (!fetchGamesNBA()) lastFetchNBA = millis() - fetchIntervalNba + FETCH_RETRY_MS; }
 
       unsigned long fetchIntervalNcaa = anyLiveGameNCAA() ? FETCH_MS : FETCH_MS_SLOW;
       if (cfgSportNCAA && now - lastFetchNCAA >= fetchIntervalNcaa) {
-        lastFetchNCAA = now; fetchGamesNCAA();
+        lastFetchNCAA = now;
+        if (!fetchGamesNCAA() && ncaaCycleDone) lastFetchNCAA = millis() - fetchIntervalNcaa + FETCH_RETRY_MS;   // toutes les conferences en echec
         if (!ncaaCycleDone) lastFetchNCAA = millis() - fetchIntervalNcaa + 3000;   // conference suivante dans ~3 s (les autres sports passent entre-temps)
       }
 
       unsigned long fetchIntervalPwhl = anyLiveGamePWHL() ? FETCH_MS : FETCH_MS_SLOW;
-      if (cfgSportPWHL && now - lastFetchPWHL >= fetchIntervalPwhl) { lastFetchPWHL = now; fetchGamesPWHL(); }
+      if (cfgSportPWHL && now - lastFetchPWHL >= fetchIntervalPwhl) { lastFetchPWHL = now; if (!fetchGamesPWHL()) lastFetchPWHL = millis() - fetchIntervalPwhl + FETCH_RETRY_MS; }
 
       // Apres un ECHEC, on reessaie vite (2 min) au lieu d'attendre les 15 min
       // au complet -> evite qu'une icone perimee traine des heures si un

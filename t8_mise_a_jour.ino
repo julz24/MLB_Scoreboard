@@ -203,7 +203,8 @@ void fwStep(unsigned long now) {
   bool due = first ? (now >= FW_FIRST_CHECK_MS) : (now - lastCheck >= FW_CHECK_EVERY_MS);
   if (fwCheckReq || due) {
     fwCheckReq = false; first = false; lastCheck = now;
-    fwCheck();
+    // Echec (serveur injoignable au demarrage, WiFi faible) : nouvel essai dans 10 min au lieu de 6 h.
+    if (!fwCheck() && fwStat == FW_ERROR) lastCheck = millis() - FW_CHECK_EVERY_MS + 600000UL;
   }
 }
 

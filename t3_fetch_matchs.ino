@@ -25,6 +25,83 @@ static String tlsError(WiFiClientSecure& c) {
   return e ? String(" [TLS ") + e + " " + b + "]" : String("");
 }
 
+// ====================== REPONSES COMPRESSEES (gzip) ======================
+// Les API (ESPN, LNH, MLB, meteo) envoient leurs reponses compressees si on le demande :
+// 10 a 17 fois moins de donnees (classement NCAA : 612 Ko -> 35 Ko). Sur un WiFi lent, les
+// gros telechargements saturaient la liaison pendant une minute (page web inaccessible).
+// Decompression par le decompresseur deflate integre a la ROM de l'ESP32 (miniz/tinfl), au fil
+// de la reception, directement dans le tampon de sortie PSRAM : pas de dictionnaire separe.
+
+// Longueur de l'entete gzip (RFC 1952) au debut de p : -1 = incomplet, -2 = pas du gzip.
+static int gzipHeaderLen(const uint8_t* p, size_t n) {
+  if (n < 10) return -1;
+  if (p[0] != 0x1f || p[1] != 0x8b || p[2] != 8) return -2;
+  uint8_t flg = p[3];
+  size_t i = 10;
+  if (flg & 4) { if (n < i + 2) return -1; i += 2 + (p[i] | (p[i + 1] << 8)); }    // FEXTRA
+  if (flg & 8)  { while (i < n && p[i]) i++; if (i >= n) return -1; i++; }          // FNAME
+  if (flg & 16) { while (i < n && p[i]) i++; if (i >= n) return -1; i++; }          // FCOMMENT
+  if (flg & 2) i += 2;                                                               // FHCRC
+  return (i > n) ? -1 : (int)i;
+}
+
+// Recoit et decompresse une reponse gzip. La fin est donnee par le flux deflate lui-meme
+// (TINFL_STATUS_DONE) : pas besoin de Content-Length ni d'attendre la fermeture.
+// Renvoie un tampon PSRAM (cap + 1 octets, termine par 0) a liberer avec free(), ou nullptr.
+static uint8_t* gzipReceive(const char* tag, WiFiClient* stream, int cap, unsigned long budgetMs, int& outLen) {
+  outLen = 0;
+  const size_t IN_SZ = 4096;
+  uint8_t* out = (uint8_t*) ps_malloc(cap + 1);
+  tinfl_decompressor* inf = (tinfl_decompressor*) ps_malloc(sizeof(tinfl_decompressor));
+  uint8_t* in = (uint8_t*) malloc(IN_SZ);
+  if (!out || !inf || !in) {
+    logAdd(String(tag) + ": memoire insuffisante (gzip)");
+    free(out); free(inf); free(in);
+    return nullptr;
+  }
+  tinfl_init(inf);
+  size_t inLen = 0, outPos = 0;
+  long got = 0;                                   // octets compresses recus
+  bool header = true, done = false, bad = false, full = false;
+  unsigned long t0 = millis(), tStart = millis(), tFeed = millis();
+  while (!done && !bad && (millis() - t0) < 15000 && (millis() - tStart) < budgetMs) {
+    if (millis() - tFeed > 10000) { tFeed = millis(); netStep(tag); }   // lent mais vivant : on nourrit le watchdog
+    int avail = stream->available();
+    if (avail <= 0) {
+      if (!stream->connected()) break;
+      delay(2);
+      continue;
+    }
+    size_t room = IN_SZ - inLen;
+    int r = stream->read(in + inLen, (size_t)avail < room ? (size_t)avail : room);
+    if (r <= 0) continue;
+    inLen += r; got += r; t0 = millis();
+
+    size_t pos = 0;
+    if (header) {
+      int h = gzipHeaderLen(in, inLen);
+      if (h == -2) { bad = true; break; }
+      if (h == -1) { if (inLen == IN_SZ) bad = true; continue; }   // entete pas encore complete
+      pos = h; header = false;
+    }
+    size_t nIn = inLen - pos, nOut = (size_t)cap - outPos;
+    tinfl_status st = tinfl_decompress(inf, in + pos, &nIn, out, out + outPos, &nOut,
+                                       TINFL_FLAG_HAS_MORE_INPUT | TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+    pos += nIn; outPos += nOut;
+    if (st == TINFL_STATUS_DONE) done = true;
+    else if (st == TINFL_STATUS_HAS_MORE_OUTPUT) { full = true; bad = true; }   // plus gros que cap
+    else if (st < 0) bad = true;
+    memmove(in, in + pos, inLen - pos);           // garde les octets pas encore consommes
+    inLen -= pos;
+  }
+  free(in); free(inf);
+  out[outPos] = 0;
+  logAdd(String(tag) + ": " + String(got) + " octets gzip -> " + String(outPos) + " octets en " + String(millis() - tStart) + "ms" +
+         (done ? "" : full ? " (TROP GROS)" : bad ? " (gzip invalide)" : " (INCOMPLET)"));
+  outLen = (int)outPos;
+  return out;
+}
+
 // ====================== TELECHARGEMENT HTTPS (commun a tous les fetchs) ======================
 // Telecharge une reponse HTTPS dans un tampon PSRAM (a liberer avec free()).
 // Poignee de main TLS bornee a 10 s, lecture bornee a 30 s au total, et
@@ -61,6 +138,11 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
     https.setTimeout(15000);
     https.setConnectTimeout(5000);
     https.useHTTP10(true);
+    // Reponse compressee si le serveur le peut (voir gzipReceive). HTTPClient refuse addHeader("Accept-Encoding")
+    // et n'envoie le sien qu'en HTTP/1.1 : on l'ajoute donc a la ligne User-Agent (meme requete, une ligne de plus).
+    https.setUserAgent("ESP32HTTPClient\r\nAccept-Encoding: gzip");
+    static const char* hdrKeys[] = {"Content-Encoding"};
+    https.collectHeaders(hdrKeys, 1);
     unsigned long tGet = millis();
     code = https.GET();
     len = https.getSize();
@@ -74,6 +156,14 @@ static uint8_t* httpsDownload(const char* tag, const char* host, const String& u
     logAdd(String(tag) + ": nouvel essai");
   }
   if (code != 200) { https.end(); client.stop(); return nullptr; }
+
+  if (https.header("Content-Encoding").indexOf("gzip") >= 0) {
+    netStep(tag);
+    uint8_t* out = gzipReceive(tag, https.getStreamPtr(), cap, budgetMs, outLen);
+    https.end();
+    client.stop();
+    return out;
+  }
 
   if (len <= 0 || len > cap) len = cap;
   uint8_t* buf = (uint8_t*) ps_malloc(len + 1);

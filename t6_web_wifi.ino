@@ -276,6 +276,13 @@ bool connectSTA() {
          " en " + String(millis() - t0) + "ms");
 
   if (ok) {
+    // Liaison instable constatee sur un 2e tableau (signal -30 dBm mais 25 % de paquets perdus,
+    // ping ~1 s) : pas de mise en veille du modem (le tableau ne repond qu'aux balises du routeur
+    // sinon) et puissance d'emission moderee (moins de chutes de tension pendant l'emission).
+    WiFi.setSleep(false);
+    WiFi.setTxPower(WIFI_POWER_15dBm);
+    logAdd("WiFi: canal " + String(WiFi.channel()) + ", point d'acces " + WiFi.BSSIDstr() +
+           ", RSSI " + String(WiFi.RSSI()) + " dBm, veille off, emission 15 dBm");
     // Force un DNS public (Cloudflare + Google) au lieu du DNS fourni par
     // le DHCP (souvent Pi-hole), qui echouait de facon repetee et bornee
     // a ~120s sur certains hotes API. On garde l'IP, la

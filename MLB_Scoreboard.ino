@@ -42,6 +42,7 @@
 #include <ElegantOTA.h>
 #include <Update.h>             // mise a jour depuis GitHub (t8_mise_a_jour.ino)
 #include <mbedtls/sha256.h>     // controle SHA-256 du firmware telecharge
+#include "miniz.h"              // decompresseur deflate de la ROM ESP32 (reponses gzip, voir gzipReceive)
 #include "version.h"            // FW_VERSION, FW_REPO
 #include <Preferences.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
@@ -553,6 +554,7 @@ const unsigned long FETCH_MS_SLOW = 900000; // intervalle sinon (15 min) - redui
 unsigned long lastWx = 0, lastAnim = 0;
 const unsigned long WX_MS = 900000;   // rafraichit la meteo toutes les 15 min (si succes)
 const unsigned long WX_RETRY_MS = 120000; // reessai rapide (2 min) apres un echec
+const unsigned long FETCH_RETRY_MS = 60000; // matchs : nouvel essai 1 min apres un echec (sinon jusqu'a 15 min sans matchs)
 // Meteo : Open-Meteo (sans cle API). Position : voir "Position de la meteo" plus haut.
 float wxTemp  = NAN;
 int   wxCode  = -1;

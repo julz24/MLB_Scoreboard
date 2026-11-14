@@ -340,6 +340,10 @@ static bool ncaaConfWanted(int ci) {
 }
 static GameNCAA ncaaTmp[MAX_GAMES_NCAA];
 static int  ncaaTmpN = 0, ncaaNextConf = 0, ncaaOkCount = 0, ncaaWanted = 0;
+static uint8_t ncaaFailMask = 0;     // conferences (bits 0..6) dont le telechargement a echoue dans ce cycle
+static long ncaaListDay = -1;        // journee sportive de la liste affichee (gamesNCAA)
+// Conference d'ou vient une equipe, comme ncaaConfWanted() : 0..5 = conference/independants, 6 = FBS complet.
+static int ncaaTeamSlot(const char* ab) { int c = ncaaTeamConf(ab); return c < 0 ? 6 : c; }
 bool ncaaCycleDone = true;
 
 bool fetchGamesNCAA() {
@@ -351,7 +355,7 @@ bool fetchGamesNCAA() {
   static const int confGroup[7] = {1, 4, 5, 8, 9, 18, 80};   // ACC, Big 12, Big Ten, SEC, Pac-12, independants, FBS complet
   char dStrN[9];                                     // dates=AAAAMMJJ : evite la grille de la veille (voir NBA)
   strftime(dStrN, sizeof(dStrN), "%Y%m%d", &tmNow);
-  if (ncaaNextConf == 0) { ncaaTmpN = 0; ncaaOkCount = 0; ncaaWanted = 0; for (int k = 0; k < 7; k++) if (ncaaConfWanted(k)) ncaaWanted++; }
+  if (ncaaNextConf == 0) { ncaaTmpN = 0; ncaaOkCount = 0; ncaaWanted = 0; ncaaFailMask = 0; for (int k = 0; k < 7; k++) if (ncaaConfWanted(k)) ncaaWanted++; }
   int ci = ncaaNextConf;
   while (ci < 7 && !ncaaConfWanted(ci)) ci++;
 
@@ -372,6 +376,7 @@ bool fetchGamesNCAA() {
     uint8_t* buf = skipDl ? nullptr : httpsDownload("fetchGamesNCAA", "site.api.espn.com",
                                 "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=" + String(confGroup[ci]) + "&limit=" + String(ci == 6 ? 400 : 100) + "&dates=" + dStrN,
                                 ci == 6 ? 4000000 : 1200000, blen, ci == 6 ? 70000UL : 45000UL);
+    if (!buf && !skipDl) ncaaFailMask |= (1 << ci);
     if (buf) {
       JsonDocument filter;
       espnScoreboardFilter(filter);
@@ -382,6 +387,7 @@ bool fetchGamesNCAA() {
       free(buf);
       if (err) {
         logAdd("fetchGamesNCAA: JSON " + String(err.c_str()));
+        ncaaFailMask |= (1 << ci);
       } else {
         ncaaOkCount++;
         bool favOnly = (ci >= 5 || !cfgNcaaConf[ci]);   // conference telechargee pour les favoris seulement
@@ -418,6 +424,20 @@ bool fetchGamesNCAA() {
   if (ncaaOkCount > 0) ncaaFetched = true;
   if (ncaaWanted > 0 && ncaaOkCount == 0) return false;   // tout a echoue : on garde les anciennes donnees
   xSemaphoreTake(dataMutex, portMAX_DELAY);
+  // Conference en echec (WiFi faible) : ses matchs de la liste actuelle sont gardes tels quels plutot
+  // que de disparaitre jusqu'au cycle suivant (34 -> 11 matchs constate). Meme journee seulement.
+  int kept = 0;
+  if (ncaaFailMask && ncaaListDay == todayDay) {
+    for (int i = 0; i < gameCountNCAA && ncaaTmpN < MAX_GAMES_NCAA; i++) {
+      const GameNCAA& o = gamesNCAA[i];
+      if (!(ncaaFailMask & ((1 << ncaaTeamSlot(o.awayAbbr)) | (1 << ncaaTeamSlot(o.homeAbbr))))) continue;
+      bool dup = false;
+      for (int k = 0; k < ncaaTmpN; k++)
+        if (strcmp(ncaaTmp[k].awayAbbr, o.awayAbbr) == 0 && strcmp(ncaaTmp[k].homeAbbr, o.homeAbbr) == 0) { dup = true; break; }
+      if (!dup) { ncaaTmp[ncaaTmpN++] = o; kept++; }
+    }
+  }
+  ncaaListDay = todayDay;
   int m = 0;
   for (int pass = 0; pass < 2; pass++)           // en direct d'abord
     for (int k = 0; k < ncaaTmpN; k++)
@@ -425,7 +445,9 @@ bool fetchGamesNCAA() {
   gameCountNCAA = m;
   buildRotationNCAA();
   dirty = true;
-  logAdd("NCAA: " + String(gameCountNCAA) + " matchs (" + String(ncaaOkCount) + "/" + String(ncaaWanted) + " conferences ok, favoris=" + String(favCountNCAA) + ", rotation=" + String(rotCountNCAA) + ")");
+  logAdd("NCAA: " + String(gameCountNCAA) + " matchs (" + String(ncaaOkCount) + "/" + String(ncaaWanted) + " conferences ok" +
+         (kept ? ", " + String(kept) + " gardes du cycle precedent" : String("")) +
+         ", favoris=" + String(favCountNCAA) + ", rotation=" + String(rotCountNCAA) + ")");
   xSemaphoreGive(dataMutex);
   return true;
 }
