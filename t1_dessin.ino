@@ -107,6 +107,17 @@ uint32_t nbaTeamRGB(const char* ab) {
   return 0xEBEBEB;
 }
 
+// Couleur d'accent par equipe CFL pour le classement (couleurs des logos, eclaircies pour les DEL).
+uint32_t cflTeamRGB(const char* ab) {
+  struct Entry { const char* a; uint32_t rgb; };
+  static const Entry kColors[] = {
+    {"BC", 0xF15623},{"CGY",0xE51937},{"EDM",0x3C9A50},{"HAM",0xFFB819},{"MTL",0x165BE6},
+    {"OTT",0xD0203A},{"SSK",0x1FA060},{"TOR",0x5F8EB5},{"WPG",0x3A6FD8},
+  };
+  for (auto &e : kColors) if (strcmp(e.a, ab)==0) return e.rgb;
+  return 0xEBEBEB;
+}
+
 // ====================== BLIT LOGO (16x16) ======================
 void drawLogo(int xo, int yo, const uint16_t* logo) {
   if (!logo) { dma->drawRect(xo, yo, MLB_LOGO_W, MLB_LOGO_H, C(40, 40, 40)); return; }
@@ -504,6 +515,32 @@ void drawStandingsNBA(int px, int di) {
   }
 }
 
+// Classement CFL : une division par diapositive (0 Est, 1 Ouest), les 3 premiers = places en series.
+// Colonne de droite : victoires-defaites ("-N" ajoute s'il y a des matchs nuls).
+void drawStandingsCFL(int px, int di) {
+  if (di < 0 || di > 1) return;
+  StandDivCFL& d = standDivCFL[di];
+  dma->setTextSize(1);
+  uint16_t white = C(255, 255, 255);
+  dma->setTextColor(white);
+  dma->setCursor(px + 2, 0);
+  dma->print(cfgLang == 0 ? d.title : d.titleEn);
+  int shown = (d.n < 3) ? d.n : 3;
+  for (int k = 0; k < shown; k++) {
+    int y = 8 + k * 8;
+    uint32_t rgb = cflTeamRGB(d.teams[k].abbr);
+    dma->setTextColor(C((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF));
+    dma->setCursor(px + 2, y);
+    dma->print(d.teams[k].abbr);
+    char rec[12];
+    if (d.teams[k].t) snprintf(rec, sizeof(rec), "%d-%d-%d", d.teams[k].w, d.teams[k].l, d.teams[k].t);
+    else              snprintf(rec, sizeof(rec), "%d-%d", d.teams[k].w, d.teams[k].l);
+    dma->setTextColor(white);
+    dma->setCursor(px + 62 - (int)strlen(rec) * 6, y);
+    dma->print(rec);
+  }
+}
+
 // ====================== CLASSEMENT MENEURS / MEILLEURS 2e (WILD CARD) ======================
 // Entierement DERIVE des donnees deja recuperees par fetchStandings() :
 // aucun appel reseau supplementaire (le reseau est le point faible de ce
@@ -655,13 +692,14 @@ void drawRaceNHL(int px, int div, int slot) {
 // toujours la meme division. renderUnified() remet ce compteur a zero a chaque rendu.
 int standShown[10];
 int standShownN = 0;
-// Cle unique d'une division/diapositive de classement (MLB 0-5, NHL 16+, NFL 32+, NBA 48+, NCAA 64).
-static int standKeyOf(int c, int nM, int nH, int nF, int nB) {
+// Cle unique d'une division/diapositive de classement (MLB 0-5, NHL 16+, NFL 32+, NBA 48+, NCAA 64, CFL 80+).
+static int standKeyOf(int c, int nM, int nH, int nF, int nB, int nN) {
   if (c < nM) return c;
   if (c < nM + nH) return 16 + (c - nM);
   if (c < nM + nH + nF) return 32 + (c - nM - nH);
   if (c < nM + nH + nF + nB) return 48 + (c - nM - nH - nF);
-  return 64;
+  if (c < nM + nH + nF + nB + nN) return 64;
+  return 80 + (c - nM - nH - nF - nB - nN);
 }
 bool standIsShown(int key) {
   for (int i = 0; i < standShownN; i++) if (standShown[i] == key) return true;
@@ -692,17 +730,18 @@ int drawStandingsCombined(int px, int offset) {
   int nNfl = (cfgSportNFL && standValidNFL && cfgShowStandNFL) ? 8 : 0;
   int nNba  = (cfgSportNBA  && standValidNBA   && cfgShowStandNBA)  ? 6 : 0;
   int nNcaa = (cfgSportNCAA && rankValidNCAA   && cfgShowStandNCAA) ? 1 : 0;
-  int total = nMlb + nNhl + nNfl + nNba + nNcaa;
+  int nCfl  = (cfgSportCFL  && standValidCFL   && cfgShowStandCFL)  ? 2 : 0;
+  int total = nMlb + nNhl + nNfl + nNba + nNcaa + nCfl;
   if (total == 0) { drawEmptySlot(px, "-"); return 0; }
   int idx = (combinedStandRot + offset) % total;
   int skipped = 0;
   for (int t = 0; t < total; t++) {          // saute ce qui est deja a l'ecran
     int cand = (combinedStandRot + offset + t) % total;
-    int key = standKeyOf(cand, nMlb, nNhl, nNfl, nNba);
+    int key = standKeyOf(cand, nMlb, nNhl, nNfl, nNba, nNcaa);
     if (!standIsShown(key)) { idx = cand; skipped = t; break; }
   }                                           // tout deja affiche (1 seule division) : on garde le 1er
   {
-    int key = standKeyOf(idx, nMlb, nNhl, nNfl, nNba);
+    int key = standKeyOf(idx, nMlb, nNhl, nNfl, nNba, nNcaa);
     standMarkShown(key);
   }
   if (idx < nMlb) {
@@ -716,8 +755,10 @@ int drawStandingsCombined(int px, int offset) {
     drawStandingsNFL(px, idx - nMlb - nNhl);
   } else if (idx < nMlb + nNhl + nNfl + nNba) {
     drawStandingsNBA(px, idx - nMlb - nNhl - nNfl);
-  } else {
+  } else if (idx < nMlb + nNhl + nNfl + nNba + nNcaa) {
     drawRankingNCAA(px);
+  } else {
+    drawStandingsCFL(px, idx - nMlb - nNhl - nNfl - nNba - nNcaa);
   }
   return skipped;
 }
@@ -1356,6 +1397,21 @@ static const uint16_t* ncaaLogo(const char* ab) {
 
 void drawPanelNCAA(int px, const GameNCAA& g) {
   drawPanelESPN(px, g, ncaaLogo(g.awayAbbr), ncaaLogo(g.homeAbbr));
+}
+
+// ====================== CFL ======================
+// Meme mise en page que la NFL (GameESPN). Logo alternatif selon le toggle "Logo alternatif" ;
+// code inconnu -> cadre gris (drawTeamLogoNFL).
+static const uint16_t* cflLogo(const char* ab) { return cflLogoByAbbrev(ab, cfgAltLogoCFL); }
+void drawPanelCFL(int px, const GameCFL& g) {
+  drawPanelESPN(px, g, cflLogo(g.awayAbbr), cflLogo(g.homeAbbr));
+}
+// CFL "aucun match" : logo du favori (20x20) ou, sans favori, le ballon de la ligue.
+void drawNoGameCFL(int px) {
+  const uint16_t* lg = cfgFavTeamCFL[0] ? cflLogo(cfgFavTeamCFL) : nullptr;
+  if (lg) drawTeamLogoNFL(px + 5, 6, lg);
+  else    blit565(px + 1 + (28 - CFL_LEAGUE_W) / 2, (32 - CFL_LEAGUE_H) / 2, LOGO_CFL_LEAGUE, CFL_LEAGUE_W, CFL_LEAGUE_H);
+  drawNoGameText(px);
 }
 
 // Top 6 NCAA : 2 colonnes x 3 rangees. Chaque case (32x10) : rang, logo 10x10

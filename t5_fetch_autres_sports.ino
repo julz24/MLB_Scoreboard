@@ -1,5 +1,5 @@
 // ============================================================
-//  t5_fetch_autres_sports.ino - Reseau : avantage numerique LNH, PWHL, NBA, NCAA (matchs et classements).
+//  t5_fetch_autres_sports.ino - Reseau : avantage numerique LNH, PWHL, NBA, NCAA, CFL (matchs et classements).
 //  Onglet du croquis MLB_Scoreboard : l'IDE Arduino colle les onglets .ino a la
 //  suite de MLB_Scoreboard.ino, par ordre alphabetique (t1, t2, ... t7).
 // ============================================================
@@ -679,4 +679,191 @@ bool fetchRankingsNCAA() {
   xSemaphoreGive(dataMutex);
   logAdd("ClassementNCAA: " + String(n) + " equipes (sondage " + String(pick["type"] | "?") + ")");
   return rankValidNCAA;
+}
+
+// ====================== CFL : MATCHS ======================
+// ESPN ne couvre plus la CFL (derniers matchs en 2022) et l'ancienne API officielle api.cfl.ca ne
+// repond plus. Matchs : le flux du site cfl.ca, cflscoreboard.cfl.ca/json/scoreboard/rounds.json -
+// toute la saison en un fichier (~310 Ko, toujours compresse en gzip ~10 Ko : httpsDownload le
+// decompresse). Tableau de "rondes" (semaines), chacune avec ses "tournaments" (= matchs) :
+//   date (UTC, "2026-11-15T23:00:00+00:00"), status, activePeriod, clock, possession,
+//   homeSquad / awaySquad { shortName, score }, isHidden.
+// Seuls les statuts "scheduled" et "complete" ont ete observes (format du direct jamais vu au
+// moment d'ecrire ce code) : tout autre statut est traite comme EN DIRECT et journalise une fois,
+// et activePeriod / clock sont lus de facon tolerante (nombre, texte ou objet).
+static int cflPeriod(JsonVariantConst v) {
+  if (v.isNull() || v.is<bool>()) return 0;
+  if (v.is<JsonObjectConst>()) {
+    static const char* const K[] = {"number", "period", "id", "name", "label"};
+    for (const char* k : K) if (!v[k].isNull()) return cflPeriod(v[k]);
+    return 0;
+  }
+  if (v.is<int>()) return v.as<int>();
+  String s = v.as<String>();
+  s.toLowerCase();
+  if (s.indexOf("ot") >= 0 || s.indexOf("overtime") >= 0 || s.indexOf("extra") >= 0) return 5;
+  for (int i = 0; i < (int)s.length(); i++) if (isDigit(s[i])) return s.substring(i).toInt();
+  return 0;
+}
+static void cflClock(JsonVariantConst v, char* out, size_t n) {
+  if (v.isNull() || v.is<bool>()) return;
+  if (v.is<JsonObjectConst>()) {
+    static const char* const K[] = {"display", "time", "remaining", "text", "clock"};
+    for (const char* k : K) if (!v[k].isNull()) { cflClock(v[k], out, n); return; }
+    return;
+  }
+  if (v.is<const char*>()) { const char* s = v.as<const char*>(); if (s && *s) strlcpy(out, s, n); return; }
+  if (v.is<float>()) { int s = v.as<int>(); if (s >= 0) snprintf(out, n, "%02d:%02d", s / 60, s % 60); }
+}
+
+bool fetchGamesCFL() {
+  struct tm tmNow;
+  if (!getSportDay(tmNow)) { logAdd("fetchGamesCFL: NTP pas pret"); return false; }
+  tzOffsetSec = computeTzOffset();
+
+  int blen = 0;
+  uint8_t* buf = httpsDownload("fetchGamesCFL", "cflscoreboard.cfl.ca",
+                               "https://cflscoreboard.cfl.ca/json/scoreboard/rounds.json", 700000, blen);
+  if (!buf) return false;
+
+  JsonDocument filter;
+  JsonObject tf = filter[0]["tournaments"][0].to<JsonObject>();
+  tf["date"] = true;
+  tf["status"] = true;
+  tf["isHidden"] = true;
+  tf["activePeriod"] = true;
+  tf["clock"] = true;
+  tf["possession"] = true;
+  tf["homeSquad"]["shortName"] = true;
+  tf["homeSquad"]["score"] = true;
+  tf["awaySquad"]["shortName"] = true;
+  tf["awaySquad"]["score"] = true;
+  JsonDocument doc(&psramAllocator);
+  DeserializationError err = deserializeJson(doc, (char*)buf, blen,
+                                             DeserializationOption::Filter(filter),
+                                             DeserializationOption::NestingLimit(20));
+  free(buf);
+  if (err) { logAdd("fetchGamesCFL: JSON " + String(err.c_str())); return false; }
+  if (!doc.is<JsonArray>()) { logAdd("fetchGamesCFL: format inattendu"); return false; }
+
+  long todayDay = nflDaysFromCivil(tmNow.tm_year + 1900, tmNow.tm_mon + 1, tmNow.tm_mday);
+  static char lastUnknown[24] = "";
+  GameCFL tmp[MAX_GAMES_CFL];
+  int n = 0;
+  for (JsonObject rnd : doc.as<JsonArray>()) {
+    for (JsonObject t : rnd["tournaments"].as<JsonArray>()) {
+      if (n >= MAX_GAMES_CFL) break;
+      if (t["isHidden"] | false) continue;
+      String st = t["status"] | "";
+      st.toLowerCase();
+      if (st.indexOf("postpon") >= 0 || st.indexOf("cancel") >= 0 || st.indexOf("suspend") >= 0) continue;   // reporte / annule
+      GameCFL g;
+      if (st == "complete" || st == "final" || st == "closed") g.state = 2;
+      else if (st == "scheduled" || st == "pre" || st == "upcoming" || st == "") g.state = 0;
+      else {
+        g.state = 1;
+        if (strcmp(lastUnknown, st.c_str()) != 0) {      // format du direct : journalise pour l'adapter
+          strlcpy(lastUnknown, st.c_str(), sizeof(lastUnknown));
+          logAdd("CFL: statut \"" + st + "\" periode=" + t["activePeriod"].as<String>() + " horloge=" + t["clock"].as<String>() +
+                 " possession=" + t["possession"].as<String>() + " -> EN DIRECT");
+        }
+      }
+      const char* dt = t["date"];
+      bool hasDate = dt && strlen(dt) >= 16;
+      if (hasDate && g.state != 1) {                      // seulement les matchs du jour (et ceux en cours)
+        long secs = nflDaysFromCivil(atoi(dt), atoi(dt + 5), atoi(dt + 8)) * 86400L
+                    + atoi(dt + 11) * 3600L + atoi(dt + 14) * 60L + tzOffsetSec;
+        long gameDay = (secs >= 0) ? secs / 86400L : -((-secs + 86399L) / 86400L);
+        if (gameDay != todayDay) continue;
+      }
+      strlcpy(g.awayAbbr, t["awaySquad"]["shortName"] | "???", 4);
+      strlcpy(g.homeAbbr, t["homeSquad"]["shortName"] | "???", 4);
+      g.awayScore = t["awaySquad"]["score"] | 0;
+      g.homeScore = t["homeSquad"]["score"] | 0;
+      g.period = (uint8_t)cflPeriod(t["activePeriod"]);
+      strcpy(g.clockStr, "--:--");
+      cflClock(t["clock"], g.clockStr, sizeof(g.clockStr));
+      g.halftime = g.state == 1 && st.indexOf("half") >= 0;
+      g.wasOT = g.state == 2 && g.period > 4;
+      String ps = t["possession"] | "";
+      ps.toLowerCase();
+      g.poss = (g.state == 1 && !g.halftime) ? (ps == "away" ? 1 : ps == "home" ? 2 : 0) : 0;
+      strcpy(g.timeStr, "--:--");
+      if (g.state == 0 && hasDate) {                      // heure locale du debut
+        long mins = atoi(dt + 11) * 60 + atoi(dt + 14) + tzOffsetSec / 60;
+        mins = ((mins % 1440) + 1440) % 1440;
+        snprintf(g.timeStr, sizeof(g.timeStr), "%02ld:%02ld", mins / 60, mins % 60);
+      }
+      tmp[n++] = g;
+    }
+  }
+
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  for (int i = 0; i < n; i++) gamesCFL[i] = tmp[i];
+  gameCountCFL = n;
+  buildRotationCFL();
+  dirty = true;
+  logAdd("CFL: " + String(gameCountCFL) + " matchs (favori idx=" + String(favIdxCFL) + ", rotation=" + String(rotCountCFL) + ")");
+  xSemaphoreGive(dataMutex);
+  return true;
+}
+
+// ====================== CFL : CLASSEMENT ======================
+// api.stats.cfl.ca/standings/<annee> (source du site stats.cfl.ca) :
+//   data.divisions.east|west.standings[] { place, abbreviation, wins, losses, ties }.
+// Avant le debut d'une saison (tout a 0-0, ou annee pas encore publiee), on garde la saison precedente.
+bool fetchStandingsCFL() {
+  struct tm tmNow;
+  if (!getLocalTime(&tmNow, 5000)) { logAdd("ClassementCFL: NTP pas pret"); return false; }
+  int year = tmNow.tm_year + 1900;
+  for (int essai = 0; essai < 2; essai++, year--) {
+    int blen = 0;
+    uint8_t* buf = httpsDownload("ClassementCFL", "api.stats.cfl.ca",
+                                 String("https://api.stats.cfl.ca/standings/") + year, 300000, blen);
+    if (!buf) { if (essai == 0) continue; return false; }
+    JsonDocument filter;
+    static const char* const DK[2] = {"east", "west"};
+    for (const char* dk : DK) {
+      JsonObject f = filter["data"]["divisions"][dk]["standings"][0].to<JsonObject>();
+      f["place"] = true; f["abbreviation"] = true; f["wins"] = true; f["losses"] = true; f["ties"] = true;
+    }
+    JsonDocument doc(&psramAllocator);
+    DeserializationError err = deserializeJson(doc, (char*)buf, blen, DeserializationOption::Filter(filter));
+    free(buf);
+    if (err) { logAdd("ClassementCFL: JSON " + String(err.c_str())); if (essai == 0) continue; return false; }
+
+    StandTeamCFL tt[2][5];
+    int nn[2] = {0, 0}, played = 0;
+    for (int d = 0; d < 2; d++) {
+      for (JsonObject r : doc["data"]["divisions"][DK[d]]["standings"].as<JsonArray>()) {
+        if (nn[d] >= 5) break;
+        StandTeamCFL& t = tt[d][nn[d]++];
+        strlcpy(t.abbr, r["abbreviation"] | "???", sizeof(t.abbr));
+        t.w = r["wins"] | 0; t.l = r["losses"] | 0; t.t = r["ties"] | 0;
+        t.place = r["place"] | 99;
+        played += t.w + t.l + t.t;
+      }
+      for (int i = 1; i < nn[d]; i++) {                  // tri par place (insertion)
+        StandTeamCFL key = tt[d][i];
+        int j = i - 1;
+        while (j >= 0 && tt[d][j].place > key.place) { tt[d][j + 1] = tt[d][j]; j--; }
+        tt[d][j + 1] = key;
+      }
+    }
+    if (nn[0] + nn[1] == 0 || (played == 0 && essai == 0)) {
+      logAdd("ClassementCFL: saison " + String(year) + " pas commencee -> saison precedente");
+      continue;
+    }
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    for (int d = 0; d < 2; d++) {
+      for (int i = 0; i < nn[d]; i++) standDivCFL[d].teams[i] = tt[d][i];
+      standDivCFL[d].n = nn[d];
+    }
+    standValidCFL = true;
+    dirty = true;
+    xSemaphoreGive(dataMutex);
+    logAdd("ClassementCFL: saison " + String(year) + ", " + String(nn[0] + nn[1]) + " equipes");
+    return true;
+  }
+  return false;
 }

@@ -1,7 +1,7 @@
 /* ============================================================
    MLB SCOREBOARD v4 - ESP32-S3-DevKitC-1 N16R8
    4 panneaux P4 64x32 (256x32). Rotation PAR SPORT :
-   NHL, MLB, NFL, NBA, NCAA football et PWHL / LPHF.
+   NHL, MLB, NFL, NBA, NCAA football, PWHL / LPHF et CFL / LCF.
    Chaque sport actif a son panneau (match du favori epingle, sinon
    rotation des matchs, sinon classement / "aucun match") ; le favori
    NHL en direct prend 2 panneaux ; la meteo occupe le dernier panneau.
@@ -58,6 +58,7 @@
 #include "logos_pwhl.h"        // logos PWHL 20x20 (cle = code d'equipe HockeyTech)
 #include "logos_nba.h"         // logos NBA 20x20 (cle = abreviation ESPN)
 #include "logos_ncaa.h"        // logos NCAA football 20x20 (cle = abreviation ESPN)
+#include "logos_cfl.h"         // logos CFL 20x20 + alternatifs (cle = code du flux cfl.ca)
 #include "logos_leagues_boot.h" // logos des ligues 28 px de haut - ecran de chargement
 #include "sport_util.h"        // templates communs aux sports (anyLive, buildRotAbbr)
 
@@ -147,6 +148,8 @@ struct GameESPN {
 };
 typedef GameESPN GameNFL;
 typedef GameESPN GameNBA;
+typedef GameESPN GameCFL;    // CFL : flux du site cfl.ca converti dans la meme structure (memes dessins)
+#define MAX_GAMES_CFL 8
 typedef GameESPN GameNCAA;   // football universitaire ; conferenceId ESPN : ACC=1, Big 12=4, Big Ten=5, SEC=8, Pac-12=9
 struct RankNCAA { char abbr[6]; char rec[8]; };
 
@@ -243,6 +246,11 @@ bool     cfgNcaaHors      = false; // Hors conference : matchs des equipes hors 
 char     cfgFavNCAA[7][6] = {"", "", "", "", "", "", ""};
 bool     cfgLiveOnlyNCAA  = false;
 bool     cfgShowStandNCAA = true; // afficher le Top 6 (et activer le favori "Top 25")
+bool     cfgSportCFL      = false; // CFL active (desactivee par defaut)
+char     cfgFavTeamCFL[4] = "";    // code CFL favori (MTL, WPG, BC...) ; "" = aucun
+bool     cfgLiveOnlyCFL   = false; // CFL : matchs en direct seulement
+bool     cfgShowStandCFL  = true;  // classement Est / Ouest dans la rotation
+bool     cfgAltLogoCFL    = false; // logos alternatifs CFL (fichiers "ALT - ...")
 
 // ----- Position de la meteo (plus aucune ville/cle ecrite en dur) -----
 // Par defaut : AUTOMATIQUE = geolocalisation de l'adresse IP publique de la
@@ -299,6 +307,11 @@ void loadCfg() {
   cfgLiveOnlyNBA  = prefs.getBool("liveNba", false);
   cfgShowStandNBA = prefs.getBool("showStNba", true);
   { String fb = prefs.getString("favNba", ""); fb.toCharArray(cfgFavTeamNBA, sizeof(cfgFavTeamNBA)); }
+  cfgSportCFL     = prefs.getBool("spCfl", false);
+  cfgLiveOnlyCFL  = prefs.getBool("liveCfl", false);
+  cfgShowStandCFL = prefs.getBool("showStCfl", true);
+  cfgAltLogoCFL   = prefs.getBool("altLogoCfl", false);
+  { String fc = prefs.getString("favCfl", ""); fc.toCharArray(cfgFavTeamCFL, sizeof(cfgFavTeamCFL)); }
   cfgSportNCAA     = prefs.getBool("spNcaa", false);
   cfgLiveOnlyNCAA  = prefs.getBool("liveNcaa", false);
   cfgShowStandNCAA = prefs.getBool("showStNcaa", true);
@@ -356,6 +369,11 @@ void saveCfg() {
   prefs.putBool("liveNba", cfgLiveOnlyNBA);
   prefs.putBool("showStNba", cfgShowStandNBA);
   prefs.putString("favNba", String(cfgFavTeamNBA));
+  prefs.putBool("spCfl", cfgSportCFL);
+  prefs.putBool("liveCfl", cfgLiveOnlyCFL);
+  prefs.putBool("showStCfl", cfgShowStandCFL);
+  prefs.putBool("altLogoCfl", cfgAltLogoCFL);
+  prefs.putString("favCfl", String(cfgFavTeamCFL));
   prefs.putBool("spNcaa", cfgSportNCAA);
   prefs.putBool("liveNcaa", cfgLiveOnlyNCAA);
   prefs.putBool("showStNcaa", cfgShowStandNCAA);
@@ -424,7 +442,7 @@ int  rotCountNFL = 0;
 int  rotBaseNFL = 0;
 unsigned long lastFetchNFL = 0;
 int  combinedStandRot = 0;       // rotation classement combinee MLB+NHL
-int  freeSportRot = 0;           // rotation equitable des panneaux libres entre les 6 sports (0-5)
+int  freeSportRot = 0;           // rotation equitable des panneaux libres entre les 7 sports (0-6)
 
 // ====================== MATCHS PWHL / NBA / NCAA (globals) ======================
 GamePWHL gamesPWHL[MAX_GAMES_PWHL];
@@ -440,6 +458,13 @@ int  favIdxNBA = -1;
 int  rotListNBA[MAX_GAMES_NBA];
 int  rotCountNBA = 0, rotBaseNBA = 0;
 unsigned long lastFetchNBA = 0, lastStandNBA = 0;
+
+GameCFL gamesCFL[MAX_GAMES_CFL];
+int  gameCountCFL = 0;
+int  favIdxCFL = -1;
+int  rotListCFL[MAX_GAMES_CFL];
+int  rotCountCFL = 0, rotBaseCFL = 0;
+unsigned long lastFetchCFL = 0, lastStandCFL = 0;
 
 GameNCAA gamesNCAA[MAX_GAMES_NCAA];
 int  gameCountNCAA = 0;
@@ -480,7 +505,7 @@ int    nhlSitCount = 0;
 int  sportWinRot = 0;       // fenetre de sports quand il y en a plus que de panneaux (voir renderUnified)
 // "Afficher ce match" (clic sur une tuile de la page web) : le match va au panneau 1 pendant UNE etape
 // de rotation (jusqu'au prochain tick), puis la rotation reprend. Retrouve par ses equipes a chaque rendu
-// (les index changent a chaque telechargement). forceSp : 0 NHL, 1 MLB (cles = id), 2 NFL, 3 NBA, 4 NCAA, 5 PWHL.
+// (les index changent a chaque telechargement). forceSp : 0 NHL, 1 MLB (cles = id), 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL.
 bool   forceOn = false;
 int8_t forceSp = -1;
 char   forceA[6] = "", forceH[6] = "";
@@ -631,3 +656,14 @@ StandDivNBA standDivNBA[6] = {
   { "SUD-OUEST",  "SOUTHWEST", {}, 0 },
 };
 bool standValidNBA = false;
+
+// ====================== CLASSEMENT CFL (globals) ======================
+// api.stats.cfl.ca/standings/<annee> : divisions Est (4 equipes) et Ouest (5), triees par place.
+// Une diapositive par division : les 3 premiers (= les places en series).
+struct StandTeamCFL { char abbr[4]; int w; int l; int t; int place; };
+struct StandDivCFL  { const char* title; const char* titleEn; StandTeamCFL teams[5]; int n; };
+StandDivCFL standDivCFL[2] = {
+  { "EST",   "EAST", {}, 0 },
+  { "OUEST", "WEST", {}, 0 },
+};
+bool standValidCFL = false;

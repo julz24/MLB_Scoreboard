@@ -1,6 +1,6 @@
 # Tableau de pointage multi-sport (ESP32-S3, 4 panneaux P4 64x32)
 
-Pointages en direct NHL, MLB, NFL, NBA, NCAA football et PWHL / LPHF, classements,
+Pointages en direct NHL, MLB, NFL, NBA, NCAA football, PWHL / LPHF et CFL / LCF, classements,
 horloge et météo, sur 4 panneaux HUB75 64x32 chaînés (256x32), avec une interface web
 de réglage (`http://scoreboard.local`).
 

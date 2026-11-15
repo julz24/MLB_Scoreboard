@@ -4,8 +4,8 @@
 //  suite de MLB_Scoreboard.ino, par ordre alphabetique (t1, t2, ... t7).
 // ============================================================
 
-// ====================== ROTATION PAR SPORTS (6 sports, 4 panneaux) ======================
-// Ordre fixe des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL.
+// ====================== ROTATION PAR SPORTS (7 sports, 4 panneaux) ======================
+// Ordre fixe des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL.
 //  - Chaque sport actif a SON panneau : match du favori epingle, sinon le match
 //    courant de sa rotation, sinon son classement, sinon "AUCUN MATCH".
 //  - Le favori NHL EN DIRECT prend 2 panneaux et reste toujours a l'ecran.
@@ -13,7 +13,7 @@
 //    une fenetre de sports glisse d'un cran a chaque rotation (sportWinRot).
 //  - Les panneaux restants montrent des matchs supplementaires (equitablement
 //    entre sports, freeSportRot), puis les classements combines.
-#define NSPORT 6
+#define NSPORT 7
 
 static bool sportOn(int k) {
   switch (k) {
@@ -23,6 +23,7 @@ static bool sportOn(int k) {
     case 3: return cfgSportNBA;
     case 4: return cfgSportNCAA;
     case 5: return cfgSportPWHL;
+    case 6: return cfgSportCFL;
   }
   return false;
 }
@@ -34,7 +35,7 @@ static bool nhlFavLive() {
   return cfgSportNHL && favIdxNHL >= 0 && favIdxNHL < gameCountNHL && gamesNHL[favIdxNHL].state == 1;
 }
 
-// Liste des matchs affichables d'un sport NOUVEAU (3 NBA, 4 NCAA, 5 PWHL) :
+// Liste des matchs affichables d'un sport NOUVEAU (3 NBA, 4 NCAA, 5 PWHL, 6 CFL) :
 // d'abord les matchs epingles (favoris), puis ceux de la rotation. Renvoie le
 // nombre total ; pinned = combien sont epingles (le panneau principal tourne
 // parmi eux, sinon parmi tous). out[] contient des index dans gamesXXX[].
@@ -46,6 +47,9 @@ static int sportGameList(int k, int* out, int& pinned) {
   } else if (k == 5) {
     if (favIdxPWHL >= 0) { out[n++] = favIdxPWHL; pinned = 1; }
     for (int i = 0; i < rotCountPWHL && n < 48; i++) out[n++] = rotListPWHL[i];
+  } else if (k == 6) {
+    if (favIdxCFL >= 0) { out[n++] = favIdxCFL; pinned = 1; }
+    for (int i = 0; i < rotCountCFL && n < 48; i++) out[n++] = rotListCFL[i];
   } else if (k == 4) {
     for (int f = 0; f < 7; f++) {
       if (!ncaaFavActive(f) || favListNCAA[f] < 0) continue;
@@ -67,15 +71,17 @@ static bool sportHasContent(int k) {
     case 3: return sportGameList(3, L, pinned) > 0 || (cfgShowStandNBA && standValidNBA);
     case 4: return sportGameList(4, L, pinned) > 0 || (cfgShowStandNCAA && rankValidNCAA);
     case 5: return sportGameList(5, L, pinned) > 0;
+    case 6: return sportGameList(6, L, pinned) > 0 || (cfgShowStandCFL && standValidCFL);
   }
   return false;
 }
-static int sportRotBase(int k) { return k == 3 ? rotBaseNBA : k == 4 ? rotBaseNCAA : rotBasePWHL; }
+static int sportRotBase(int k) { return k == 3 ? rotBaseNBA : k == 4 ? rotBaseNCAA : k == 6 ? rotBaseCFL : rotBasePWHL; }
 
 static void drawNewGame(int k, int px, int idx) {
   if (k == 3 && idx >= 0 && idx < gameCountNBA)   drawPanelNBA(px, gamesNBA[idx]);
   if (k == 4 && idx >= 0 && idx < gameCountNCAA)  drawPanelNCAA(px, gamesNCAA[idx]);
   if (k == 5 && idx >= 0 && idx < gameCountPWHL)  drawPanelPWHL(px, gamesPWHL[idx]);
+  if (k == 6 && idx >= 0 && idx < gameCountCFL)   drawPanelCFL(px, gamesCFL[idx]);
 }
 
 // Position du match montre sur le panneau principal d'un sport nouveau. Avec des favoris
@@ -108,6 +114,14 @@ static void drawNewPrimary(int k, int px) {
     int slot = -1;                                            // 1er favori actif : son logo sur "aucun match"
     if (ncaaFetched) for (int f = 0; f < 7; f++) if (ncaaFavActive(f)) { slot = f; break; }
     drawNoGameNCAA(px, slot);
+  } else if (k == 6) {
+    if (cfgShowStandCFL && standValidCFL) {                   // Est / Ouest a tour de role
+      int di = combinedStandRot % 2;
+      standMarkShown(80 + di);
+      drawStandingsCFL(px, di);
+      return;
+    }
+    drawNoGameCFL(px);
   } else {
     drawNoGamePWHL(px);
   }
@@ -155,7 +169,7 @@ static void drawSportPrimary(int k, int px, bool wide) {
     else if (rotCountNFL > 0) drawPanelNFL(px, gamesNFL[rotListNFL[rotBaseNFL % rotCountNFL]]);
     else                      { if (!drawStandingsSport(px, 2)) drawNoGameNFL(px); }
   } else {
-    drawNewPrimary(k, px);                                    // NBA / NCAA / PWHL
+    drawNewPrimary(k, px);                                    // NBA / NCAA / PWHL / CFL
   }
 }
 
@@ -208,6 +222,7 @@ static int forcedIdx() {
     case 3: FIND_FORCED(gamesNBA, gameCountNBA);
     case 4: FIND_FORCED(gamesNCAA, gameCountNCAA);
     case 5: FIND_FORCED(gamesPWHL, gameCountPWHL);
+    case 6: FIND_FORCED(gamesCFL, gameCountCFL);
   }
   return -1;
 }
@@ -229,6 +244,7 @@ static int drawForced(int px, int room) {
     case 3: drawPanelNBA(px, gamesNBA[i]); return 1;
     case 4: drawPanelNCAA(px, gamesNCAA[i]); return 1;
     case 5: drawPanelPWHL(px, gamesPWHL[i]); return 1;
+    case 6: drawPanelCFL(px, gamesCFL[i]); return 1;
   }
   return 0;
 }
@@ -281,7 +297,7 @@ void renderUnified() {
   // L'ORDRE de priorite entre sports tourne (freeSportRot) plutot que d'etre
   // fixe, pour une rotation equitable quand plusieurs sports ont des matchs
   // supplementaires disponibles en meme temps.
-  int extra[NSPORT] = {0, 0, 0, 0, 0, 0};
+  int extra[NSPORT] = {0};
   int standIdx = 0;
   int panelsFilled = 0;
   while (s < limit) {
@@ -371,8 +387,8 @@ void buildRotation() {
   dirty = true;
 }
 
-// ====================== ROTATION NFL / NHL / NBA / PWHL ======================
-// Meme logique pour les 4 sports identifies par abreviation : buildRotAbbr() (sport_util.h).
+// ====================== ROTATION NFL / NHL / NBA / PWHL / CFL ======================
+// Meme logique pour les 5 sports identifies par abreviation : buildRotAbbr() (sport_util.h).
 void buildRotationNFL() {
   buildRotAbbr(gamesNFL, gameCountNFL, cfgFavTeamNFL, cfgLiveOnlyNFL, favIdxNFL, rotListNFL, rotCountNFL, rotBaseNFL);
   dirty = true;
@@ -387,6 +403,10 @@ void buildRotationNBA() {
 }
 void buildRotationPWHL() {
   buildRotAbbr(gamesPWHL, gameCountPWHL, cfgFavTeamPWHL, cfgLiveOnlyPWHL, favIdxPWHL, rotListPWHL, rotCountPWHL, rotBasePWHL);
+  dirty = true;
+}
+void buildRotationCFL() {
+  buildRotAbbr(gamesCFL, gameCountCFL, cfgFavTeamCFL, cfgLiveOnlyCFL, favIdxCFL, rotListCFL, rotCountCFL, rotBaseCFL);
   dirty = true;
 }
 

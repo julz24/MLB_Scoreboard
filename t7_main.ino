@@ -78,7 +78,7 @@ void bootWifiScreen(bool connected) {
 // complet -> pas de scintillement.
 #define BOOT_PITCH 64
 #define BOOT_STEP  2
-#define BOOT_LOGOS 5
+#define BOOT_LOGOS 6
 void bootAnimFrame(int off) {
   for (int i = 0; i < 10; i++) {                    // 10 cases : couvre l'ecran pour tout decalage 0..319
     int x0 = i * BOOT_PITCH - off;
@@ -89,7 +89,8 @@ void bootAnimFrame(int off) {
       case 1:  lg = LG_BOOT_MLB;  w = LG_BOOT_MLB_W;  h = LG_BOOT_MLB_H;  break;
       case 2:  lg = LG_BOOT_NFL;  w = LG_BOOT_NFL_W;  h = LG_BOOT_NFL_H;  break;
       case 3:  lg = LG_BOOT_NBA;  w = LG_BOOT_NBA_W;  h = LG_BOOT_NBA_H;  break;
-      default: lg = LG_BOOT_PWHL; w = LG_BOOT_PWHL_W; h = LG_BOOT_PWHL_H; break;
+      case 4:  lg = LG_BOOT_PWHL; w = LG_BOOT_PWHL_W; h = LG_BOOT_PWHL_H; break;
+      default: lg = LOGO_CFL_LEAGUE; w = CFL_LEAGUE_W; h = CFL_LEAGUE_H; break;
     }
     int xo = x0 + (BOOT_PITCH - w) / 2, yo = (PANEL_RES_Y - h) / 2;
     for (int y = 0; y < h; y++)
@@ -215,6 +216,8 @@ void setup() {
   lastFetchNCAA = millis() - FETCH_MS_SLOW + 55000;    // NCAA ~55 s
   lastStandNBA  = millis() - STAND_MS + 45000;         // classement NBA ~45 s
   lastStandNCAA = millis() - STAND_MS + 65000;         // Top 6 NCAA ~65 s
+  lastFetchCFL  = millis() - FETCH_MS_SLOW + 75000;    // CFL  ~75 s
+  lastStandCFL  = millis() - STAND_MS + 85000;         // classement CFL ~85 s
   bootAnimStop();    // fin du defilement : le panneau est a nouveau libre
   render();          // affiche les matchs tout de suite
   logAdd("[t+" + String(millis() - tBoot) + "ms] boot termine, serveur actif");
@@ -262,6 +265,7 @@ bool anyLiveGameNHL()  { return anyLive(gamesNHL,  gameCountNHL);  }
 bool anyLiveGameNBA()  { return anyLive(gamesNBA,  gameCountNBA);  }
 bool anyLiveGameNCAA() { return anyLive(gamesNCAA, gameCountNCAA); }
 bool anyLiveGamePWHL() { return anyLive(gamesPWHL, gameCountPWHL); }
+bool anyLiveGameCFL()  { return anyLive(gamesCFL,  gameCountCFL);  }
 
 // ====================== TACHE RESEAU (coeur separe) ======================
 void netTask(void* pv) {
@@ -315,6 +319,9 @@ void netTask(void* pv) {
       unsigned long fetchIntervalPwhl = anyLiveGamePWHL() ? FETCH_MS : FETCH_MS_SLOW;
       if (cfgSportPWHL && now - lastFetchPWHL >= fetchIntervalPwhl) { lastFetchPWHL = now; if (!fetchGamesPWHL()) lastFetchPWHL = millis() - fetchIntervalPwhl + FETCH_RETRY_MS; }
 
+      unsigned long fetchIntervalCfl = anyLiveGameCFL() ? FETCH_MS : FETCH_MS_SLOW;
+      if (cfgSportCFL && now - lastFetchCFL >= fetchIntervalCfl) { lastFetchCFL = now; if (!fetchGamesCFL()) lastFetchCFL = millis() - fetchIntervalCfl + FETCH_RETRY_MS; }
+
       // Apres un ECHEC, on reessaie vite (2 min) au lieu d'attendre les 15 min
       // au complet -> evite qu'une icone perimee traine des heures si un
       // fetch rate au mauvais moment (ex: pile a la transition jour/nuit).
@@ -337,6 +344,10 @@ void netTask(void* pv) {
       static bool standNbaLastOk = false;
       unsigned long standIntervalNba = standNbaLastOk ? STAND_MS : WX_RETRY_MS;
       if (cfgSportNBA && now - lastStandNBA >= standIntervalNba) { lastStandNBA = now; standNbaLastOk = fetchStandingsNBA(); }
+
+      static bool standCflLastOk = false;
+      unsigned long standIntervalCfl = standCflLastOk ? STAND_MS : WX_RETRY_MS;
+      if (cfgSportCFL && now - lastStandCFL >= standIntervalCfl) { lastStandCFL = now; standCflLastOk = fetchStandingsCFL(); }
 
       static bool rankNcaaLastOk = false;
       unsigned long rankIntervalNcaa = rankNcaaLastOk ? STAND_MS : 10UL * 60UL * 1000UL;   // fichier lourd : 30 min si ok, 10 min si echec
@@ -450,7 +461,8 @@ void loop() {
     if (rotCountNBA > 0) rotBaseNBA = (rotBaseNBA + 1) % rotCountNBA;
     if (rotCountNCAA > 0) rotBaseNCAA = (rotBaseNCAA + 1) % rotCountNCAA;
     if (rotCountPWHL > 0) rotBasePWHL = (rotBasePWHL + 1) % rotCountPWHL;
-    sportWinRot = (sportWinRot + 1) % 60;   // fenetre de sports (60 = multiple de 1..6 : pas de saut quand le nombre de sports change)
+    if (rotCountCFL > 0) rotBaseCFL = (rotBaseCFL + 1) % rotCountCFL;
+    sportWinRot = (sportWinRot + 1) % 420;  // fenetre de sports (420 = multiple de 1..7 : pas de saut quand le nombre de sports change)
     combinedStandRot++;   // classement combine MLB+NHL (drawStandingsCombined fait le modulo)
     freeSportRot = (freeSportRot + 1) % NSPORT;
     forceOn = false;   // match choisi dans la page web : une seule etape, puis la rotation reprend

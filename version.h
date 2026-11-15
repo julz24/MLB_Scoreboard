@@ -7,6 +7,6 @@
 // FW_REPO : "proprietaire/depot" sur GitHub. Le tableau y lit la derniere
 // release publiee (les brouillons et les pre-releases sont ignores).
 #pragma once
-#define FW_VERSION "2.0.0"
+#define FW_VERSION "3.0.0"
 #define FW_REPO    "julz24/MLB_Scoreboard"
 #define FW_ASSET   "scoreboard.bin"   // nom du fichier .bin attache a chaque release

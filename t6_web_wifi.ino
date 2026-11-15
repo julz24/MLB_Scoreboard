@@ -59,6 +59,12 @@ void handleState() {
   j += ",\"liveNba\":" + String(cfgLiveOnlyNBA ? "true" : "false");
   j += ",\"showStNba\":" + String(cfgShowStandNBA ? "true" : "false");
   j += ",\"gamesNba\":" + String(gameCountNBA);
+  j += ",\"spCfl\":" + String(cfgSportCFL ? "true" : "false");
+  j += ",\"favCfl\":\"" + String(cfgFavTeamCFL) + "\"";
+  j += ",\"liveCfl\":" + String(cfgLiveOnlyCFL ? "true" : "false");
+  j += ",\"showStCfl\":" + String(cfgShowStandCFL ? "true" : "false");
+  j += ",\"altLogoCfl\":" + String(cfgAltLogoCFL ? "true" : "false");
+  j += ",\"gamesCfl\":" + String(gameCountCFL);
   j += ",\"spNcaa\":" + String(cfgSportNCAA ? "true" : "false");
   for (int k = 0; k < 7; k++) j += ",\"favNc" + String(k) + "\":\"" + String(cfgFavNCAA[k]) + "\"";
   j += ",\"liveNcaa\":" + String(cfgLiveOnlyNCAA ? "true" : "false");
@@ -87,7 +93,7 @@ void handleState() {
 }
 
 // ---- Tuiles de matchs (page d'accueil) ----
-// Un objet par match des sports actifs : s sport (0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL),
+// Un objet par match des sports actifs : s sport (0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL),
 // a/h abreviations, ka/kh cles MLB (id), as/hs pointage, st etat (0 a venir, 1 direct, 2 final),
 // p periode/manche, c chrono, t heure, f drapeaux (1 prol., 2 tirs de barrage, 4 entracte/mi-temps,
 // 8 haut de manche, 16 reporte).
@@ -125,6 +131,7 @@ void handleGames() {
     gjAdd(j, 5, g.awayAbbr, g.homeAbbr, g.awayScore, g.homeScore, g.state, g.period, "", g.timeStr,
           (g.wasOT ? 1 : 0) | (g.wasSO ? 2 : 0) | (g.intermission ? 4 : 0)); j += "}";
   }
+  if (cfgSportCFL)  gjESPN(j, 6, gamesCFL, gameCountCFL);
   bool fo = forceOn; int fs = forceSp; String fa = forceA, fh = forceH;
   xSemaphoreGive(dataMutex);
   j += "],\"force\":";
@@ -146,6 +153,7 @@ void handleLogo() {
     case 3: px = nbaLogoByAbbrev(a.c_str()); break;
     case 4: px = ncaaLogo(a.c_str()); break;
     case 5: px = pwhlLogoByAbbrev(a.c_str()); break;
+    case 6: px = cflLogoByAbbrev(a.c_str(), server.hasArg("alt") ? server.arg("alt") == "1" : cfgAltLogoCFL); break;
   }
   if (!px) { server.send(404, "text/plain", "aucun logo"); return; }
   static uint8_t buf[2 + 28 * 28 * 2];
@@ -160,7 +168,7 @@ void handleLogo() {
 void handleShow() {
   int s = server.arg("s").toInt();
   String a = server.arg("a"), h = server.arg("h");
-  if (s < 0 || s >= 6 || a.length() == 0 || a.length() > 5 || h.length() == 0 || h.length() > 5) { server.send(400, "text/plain", "parametres"); return; }
+  if (s < 0 || s >= 7 || a.length() == 0 || a.length() > 5 || h.length() == 0 || h.length() > 5) { server.send(400, "text/plain", "parametres"); return; }
   xSemaphoreTake(dataMutex, portMAX_DELAY);
   bool prevOn = forceOn; int8_t prevSp = forceSp; char pa[6], ph[6];
   strcpy(pa, forceA); strcpy(ph, forceH);
@@ -249,6 +257,16 @@ void handleSet() {
     fb.toUpperCase();
     fb.toCharArray(cfgFavTeamNBA, sizeof(cfgFavTeamNBA));
     buildRotationNBA();
+  }
+  if (server.hasArg("spCfl")) { cfgSportCFL = server.arg("spCfl").toInt() == 1; dirty = true; if (cfgSportCFL) { lastFetchCFL = millis() - FETCH_MS_SLOW - 1; lastStandCFL = millis() - STAND_MS - 1; } }
+  if (server.hasArg("liveCfl")) { cfgLiveOnlyCFL = server.arg("liveCfl").toInt() == 1; buildRotationCFL(); }
+  if (server.hasArg("showStCfl")) { cfgShowStandCFL = server.arg("showStCfl").toInt() == 1; dirty = true; }
+  if (server.hasArg("altLogoCfl")) { cfgAltLogoCFL = server.arg("altLogoCfl").toInt() == 1; dirty = true; }
+  if (server.hasArg("favCfl")) {
+    String fc = server.arg("favCfl");
+    fc.toUpperCase();
+    fc.toCharArray(cfgFavTeamCFL, sizeof(cfgFavTeamCFL));
+    buildRotationCFL();
   }
   if (server.hasArg("spNcaa")) { cfgSportNCAA = server.arg("spNcaa").toInt() == 1; dirty = true; if (cfgSportNCAA) { lastFetchNCAA = millis() - FETCH_MS_SLOW - 1; lastStandNCAA = millis() - STAND_MS - 1; } }
   if (server.hasArg("liveNcaa")) { cfgLiveOnlyNCAA = server.arg("liveNcaa").toInt() == 1; buildRotationNCAA(); }
