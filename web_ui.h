@@ -77,6 +77,44 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
 #fwNotes{white-space:pre-wrap;font:inherit;font-size:14px;line-height:1.5;color:var(--mut);max-height:50vh;overflow:auto;margin:0}
 #logsBox{display:none;background:#0a0b0d;color:#8fe08f;font-size:11px;line-height:1.4;padding:10px;border-radius:12px;
   max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:14px 0 0}
+/* Tuiles de matchs (accueil) : defilement horizontal par fleches ou au doigt */
+.gmh{display:flex;align-items:center;gap:8px;margin:0 4px 10px}
+.gmh .sec{margin:0;flex:1;font-size:16px;letter-spacing:0;color:var(--txt)}
+.arr{width:38px;height:38px;border-radius:19px;border:1px solid #8a9199;background:transparent;color:var(--txt);
+  font-size:24px;line-height:1;cursor:pointer;padding:0 0 3px;flex:none}
+.arr:active{background:#ffffff14}
+.arr:disabled{opacity:.3;cursor:default}
+.gms{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:2px}
+.gms::-webkit-scrollbar{display:none}
+.gt{flex:0 0 calc(50% - 5px);background:var(--field);border:2px solid transparent;border-radius:18px;padding:10px 12px;
+  cursor:pointer;scroll-snap-align:start;user-select:none}
+.gt:active{background:#2a2f35}
+.gt.sent{border-color:var(--pri)}
+.gr{display:flex;align-items:center;gap:10px;margin:3px 0}
+.gr canvas{width:32px;height:32px;image-rendering:pixelated;background:#000;border-radius:8px;flex:none}
+.gab{flex:1;font-size:16px;font-weight:500}
+.gsc{font-size:20px;font-weight:500}
+.gr.dim .gab,.gr.dim .gsc{color:var(--mut)}
+.gst{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px;color:var(--mut);margin-top:6px}
+.gst .lv{color:#ff8a80;font-weight:500}
+.gst .lg{font-size:11px;letter-spacing:.06em}
+#gmHint{margin:10px 4px 0;text-align:center}
+/* Menus "Equipe favorite" avec logos (le <select> reste en place, cache, pour sa logique) */
+.pk{width:58%;display:flex;align-items:center;gap:10px;font-size:15px;border-radius:12px;border:1px solid var(--line);
+  padding:6px 10px;background:var(--field);color:var(--txt);cursor:pointer;text-align:left;min-height:44px}
+.pk canvas,.pko canvas{image-rendering:pixelated;background:#000;flex:none}
+.pk canvas{width:28px;height:28px;border-radius:6px}
+.pk span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk:after{content:"\25BE";color:var(--mut)}
+dialog#pkDlg{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:24px;padding:0;
+  width:min(420px,calc(100vw - 32px));box-sizing:border-box}
+dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
+#pkDlg h3{margin:0;padding:18px 20px 10px;font-size:18px;font-weight:500}
+.pkl{max-height:65vh;overflow-y:auto;padding:0 10px 12px}
+.pko{display:flex;align-items:center;gap:14px;padding:8px 10px;border-radius:14px;cursor:pointer;font-size:15px}
+.pko:active{background:#ffffff14}
+.pko.on{background:var(--tonal);color:var(--pri);font-weight:500}
+.pko canvas{width:34px;height:34px;border-radius:8px}
 </style></head><body>
 
 <header>
@@ -86,6 +124,13 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
 
 <!-- ===================== ACCUEIL ===================== -->
 <div class="view" id="v_home">
+  <div class="card" id="gmCard" style="display:none;padding:14px 12px">
+    <div class="gmh"><div class="sec" id="t_games">Matchs</div>
+      <button class="arr" id="gmL" onclick="gmScroll(-1)" aria-label="&#8592;">&#8249;</button>
+      <button class="arr" id="gmR" onclick="gmScroll(1)" aria-label="&#8594;">&#8250;</button></div>
+    <div class="gms" id="gmStrip"></div>
+    <div class="hint" id="gmHint"></div>
+  </div>
   <div class="card nav" onclick="go('sports')">
     <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d4e8ff" stroke-width="1.8" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9.2"/>
@@ -122,7 +167,7 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
     <label class="sw"><input type="checkbox" id="wcNhl" onchange="set('wcNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
   <div class="row"><label id="t_altLogoNhl">Logo alternatif</label>
-    <label class="sw"><input type="checkbox" id="altLogoNhl" onchange="set('altLogoNhl',this.checked?1:0)"><span class="sl"></span></label>
+    <label class="sw"><input type="checkbox" id="altLogoNhl" onchange="set('altLogoNhl',this.checked?1:0);if(lastState)lastState.altLogoNhl=this.checked;pkSync();gmLoad()"><span class="sl"></span></label>
   </div>
   <div class="row"><label id="t_wideNhl">Chronomètre en direct</label>
     <label class="sw"><input type="checkbox" id="wideNhl" onchange="set('wideNhl',this.checked?1:0)"><span class="sl"></span></label>
@@ -325,6 +370,7 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <pre id="logsBox"></pre>
 </div>
+<dialog id="pkDlg"><h3 id="pkTitle"></h3><div class="pkl" id="pkList"></div></dialog>
 <dialog id="fwDlg">
   <h3 id="fwDlgTitle"></h3>
   <pre id="fwNotes"></pre>
@@ -409,6 +455,7 @@ const TR={
   t_livePwhl:["Matchs en direct seulement","Live games only"],
   t_secPwhl:["LPHF","PWHL"],
   t_spPwhl:["LPHF","PWHL"],
+  t_games:["Matchs","Games"],
   t_navSub:["LNH · MLB · NFL · NBA · NCAA · LPHF","NHL · MLB · NFL · NBA · NCAA · PWHL"],
   t_secNba:["NBA","NBA"],
   t_spNba:["NBA","NBA"],
@@ -439,6 +486,9 @@ const TR={
   fwCheckBtn:["Vérifier les mises à jour","Check for updates"]
 };
 const TRX={
+  gmTap:["Touchez un match pour l'afficher au panneau 1","Tap a game to show it on panel 1"],
+  gmSent:["Au panneau 1","On panel 1"],
+  gmGone:["Ce match n'est plus dans la liste","This game is no longer listed"],
   noneFav:["Aucun (rotation complète)","None (full rotation)"],
   sched:["matchs a l'horaire aujourd'hui","games scheduled today"],
   logsShow:["Voir les logs","View logs"],
@@ -497,6 +547,7 @@ function applyLang(){
   for(const k in TR) { const el=document.getElementById(k); if(el) el.textContent=TR[k][lang]; }
   langFR.classList.toggle('on', lang==0);
   langEN.classList.toggle('on', lang==1);
+  gmApplyLang();
   logsBtn.textContent = logsOpen ? TRX.logsHide[lang] : TRX.logsShow[lang];
   hdr.textContent = TRX[curView()||'home'][lang];
   if(lastState) applyDynamic(lastState);   // re-traduit les parties dynamiques
@@ -646,6 +697,7 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   schApply(s);
   showWx(s);
   applyLang();
+  pkSync();
 })}
 // ---- Mise a jour du firmware ----
 // fwStat : 0 rien, 1 verification, 2 a jour, 3 disponible, 4 installation, 5 erreur
@@ -702,8 +754,160 @@ function toggleLogs(){
   if(logsOpen){ refreshLogs(); box.scrollTop=box.scrollHeight; logsTimer=setInterval(refreshLogs,2000); }
   else if(logsTimer){ clearInterval(logsTimer); logsTimer=null; }
 }
+// ---- Tuiles de matchs (accueil) : un clic envoie le match au panneau 1 pour une etape de rotation ----
+const LG=[["LNH","NHL"],["MLB","MLB"],["NFL","NFL"],["NBA","NBA"],["NCAA","NCAA"],["LPHF","PWHL"]];
+let gmData=null, gmJson='', gmLang=-1, gmAlt=null, gmHintT=null, gmBusy=false;
+const gmLogo={}, gmQ=[];
+function gmKey(g,w){ return w==0?(g.ka||g.a):(g.kh||g.h); }          // MLB : ids ; autres sports : abreviations
+function gmId(g){ return g.s+'|'+gmKey(g,0)+'|'+gmKey(g,1); }
+function gmOrd(n){ return lang==0?n+(n==1?'re':'e'):n+((n%100>10&&n%100<14)?'th':(['th','st','nd','rd'][n%10]||'th')); }
+function gmStatus(g){
+  const F=lang==0;
+  if(g.st==0) return (g.f&16)?(F?'Reporté':'Postponed'):(g.t||'');
+  if(g.st==2){
+    let x=F?'Fin':'Final';
+    if(g.f&2) x+=F?' (TB)':' (SO)';
+    else if(g.f&1) x+=F?' (Prol.)':' (OT)';
+    else if(g.s==1&&g.p>9) x+=' ('+g.p+')';
+    return x;
+  }
+  if(g.s==1) return ((g.f&8)?'▲ ':'▼ ')+gmOrd(g.p);                        // MLB : manche
+  if(g.s==0||g.s==5){                                                        // hockey
+    if(g.f&4) return (F?'Entracte ':'Int. ')+(g.p<=3?gmOrd(g.p):'');
+    return (g.p<=3?gmOrd(g.p):g.p==4?(F?'Prol.':'OT'):(F?'TB':'SO'))+(g.c?' '+g.c:'');
+  }
+  if(g.f&4) return F?'Mi-temps':'Halftime';                                  // NFL / NBA / NCAA
+  return (g.p<=4?'Q'+g.p:g.p==5?(F?'Prol.':'OT'):(g.p-4)+(F?'e prol.':'OT'))+(g.c?' '+g.c:'');
+}
+function gmRender(){
+  if(!gmData) return;
+  const box=gmStrip, sl=box.scrollLeft, L=gmData.g||[];
+  gmCard.style.display=L.length?'block':'none';
+  box.innerHTML=L.map((g,i)=>{
+    const fin=g.st==2;
+    const row=w=>{ const sc=w==0?g.as:g.hs, ot=w==0?g.hs:g.as;
+      return '<div class="gr'+(fin&&sc<ot?' dim':'')+'"><canvas data-l="'+lk(g.s,gmKey(g,w))+'" width="1" height="1"></canvas>'+
+             '<span class="gab">'+(w==0?g.a:g.h)+'</span><span class="gsc">'+(g.st==0?'':sc)+'</span></div>'; };
+    return '<div class="gt'+(gmId(g)==gmData.force?' sent':'')+'" onclick="gmShow('+i+')">'+row(0)+row(1)+
+           '<div class="gst"><span'+(g.st==1?' class="lv"':'')+'>'+gmStatus(g)+'</span><span class="lg">'+LG[g.s][lang]+'</span></div></div>';
+  }).join('');
+  box.scrollLeft=sl;
+  for(const c of box.querySelectorAll('canvas')) gmPaint(c);
+  gmArrows();
+}
+// Logos : les pixels memes du panneau (/api/logo), un telechargement a la fois, gardes en memoire.
+function gmPaint(c){
+  const L=gmLogo[c.dataset.l];
+  if(L===undefined){ if(!gmQ.includes(c.dataset.l)) gmQ.push(c.dataset.l); gmNext(); return; }
+  if(L){ c.width=L.width; c.height=L.height; c.getContext('2d').putImageData(L,0,0); }
+}
+function gmNext(){
+  if(gmBusy||!gmQ.length) return;
+  gmBusy=true;
+  const k=gmQ.shift(), p=k.split('|');
+  fetch('/api/logo?s='+p[0]+'&a='+encodeURIComponent(p[1])+(p[2]?'&alt='+p[2]:''))
+  .then(r=>r.ok?r.arrayBuffer():null).then(b=>{
+    let img=null;
+    if(b&&b.byteLength>2){
+      const u=new Uint8Array(b), w=u[0], h=u[1];
+      img=new ImageData(w,h);
+      for(let i=0;i<w*h;i++){ const v=u[2+2*i]|(u[3+2*i]<<8), o=i*4;
+        img.data[o]=(v>>11)<<3; img.data[o+1]=((v>>5)&63)<<2; img.data[o+2]=(v&31)<<3; img.data[o+3]=v?255:0; }
+    }
+    gmLogo[k]=img;
+    for(const c of document.querySelectorAll('canvas[data-l="'+k+'"]')) gmPaint(c);
+  }).catch(()=>{}).finally(()=>{ gmBusy=false; gmNext(); });
+}
+function gmLoad(){
+  if(curView()!=='') return;                                   // seulement sur l'accueil
+  fetch('/api/games',{cache:'no-store'}).then(r=>r.ok?r.text():null).then(t=>{
+    if(!t) return;
+    const alt=!!(lastState&&lastState.altLogoNhl);
+    let redo=false;
+    if(alt!==gmAlt){ if(gmAlt!==null) redo=true; gmAlt=alt; }
+    if(t===gmJson&&!redo) return;
+    gmJson=t; gmData=JSON.parse(t); gmRender();
+  }).catch(()=>{});
+}
+function gmShow(i){
+  const g=gmData.g[i];
+  fetch('/api/show?s='+g.s+'&a='+encodeURIComponent(gmKey(g,0))+'&h='+encodeURIComponent(gmKey(g,1)),{cache:'no-store'})
+  .then(r=>{
+    gmHintMsg(r.ok?TRX.gmSent[lang]+' : '+g.a+' – '+g.h:TRX.gmGone[lang]);
+    if(r.ok){ gmData.force=gmId(g); gmRender(); } else { gmJson=''; gmLoad(); }
+  }).catch(()=>{});
+}
+function gmHintMsg(m){
+  gmHint.textContent=m; clearTimeout(gmHintT);
+  gmHintT=setTimeout(()=>{ gmHintT=null; gmHint.textContent=TRX.gmTap[lang]; },5000);
+}
+function gmScroll(d){ gmStrip.scrollBy({left:d*Math.max(gmStrip.clientWidth-20,100),behavior:'smooth'}); }
+function gmArrows(){ const b=gmStrip; gmL.disabled=b.scrollLeft<=2; gmR.disabled=b.scrollLeft+b.clientWidth>=b.scrollWidth-2; }
+function gmApplyLang(){
+  if(gmLang===lang) return;
+  gmLang=lang;
+  if(!gmHintT) gmHint.textContent=TRX.gmTap[lang];
+  gmRender();
+}
+// ---- Menus "Equipe favorite" avec logos ----
+// Chaque <select> de favori est cache et remplace par un bouton (logo + nom) qui ouvre une liste avec
+// les logos du panneau (/api/logo ; logo alternatif LNH si le toggle est actif). Le choix est ecrit dans
+// le <select> puis son onchange habituel est declenche : toute la logique existante reste la meme.
+const PK={favNhl:0,fav:1,favNfl:2,favNba:3,favNc0:4,favNc1:4,favNc2:4,favNc3:4,favNc4:4,favNc6:4,favPwhl:5};
+let pkCur=null;
+function nhlAlt(){ return !!(lastState&&lastState.altLogoNhl); }
+function lk(s,ab){ return s+'|'+ab+(s==0?'|'+(nhlAlt()?1:0):''); }    // cle du logo (LNH : + logo alternatif)
+function pkNone(v){ return v===''||v==='0'; }
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function pkInit(){
+  for(const id in PK){
+    const sel=document.getElementById(id); if(!sel) continue;
+    sel.style.display='none';
+    const b=document.createElement('button');
+    b.type='button'; b.className='pk'; b.id='pk_'+id; b.onclick=()=>pkOpen(id);
+    b.innerHTML='<canvas width="1" height="1"></canvas><span></span>';
+    sel.after(b);
+  }
+  document.body.appendChild(pkDlg);   // hors des vues cachees (display:none) sinon la fenetre ne s'affiche pas
+  pkDlg.addEventListener('click',e=>{ if(e.target===pkDlg) pkDlg.close(); });
+  pkList.addEventListener('click',e=>{
+    const r=e.target.closest('.pko'); if(!r||!pkCur) return;
+    const sel=document.getElementById(pkCur);
+    sel.value=r.dataset.v; sel.dispatchEvent(new Event('change'));
+    pkDlg.close(); pkSync();
+  });
+}
+function pkCanvas(c,k){
+  if(c.dataset.l===k) return;
+  c.dataset.l=k; c.width=c.height=1;
+  c.style.display=k?'':'none';
+  if(k) gmPaint(c);
+}
+function pkSync(){
+  for(const id in PK){
+    const sel=document.getElementById(id), b=document.getElementById('pk_'+id); if(!sel||!b) continue;
+    const o=sel.options[sel.selectedIndex];
+    b.querySelector('span').textContent=o?o.textContent:'';
+    pkCanvas(b.querySelector('canvas'), o&&!pkNone(o.value)?lk(PK[id],o.value):'');
+  }
+}
+function pkOpen(id){
+  pkCur=id;
+  const sel=document.getElementById(id), s=PK[id], lab=sel.closest('.row')&&sel.closest('.row').querySelector('label');
+  pkTitle.textContent=lab?lab.textContent:'';
+  pkList.innerHTML=[...sel.options].filter(o=>!o.disabled).map(o=>
+    '<div class="pko'+(o.selected?' on':'')+'" data-v="'+esc(o.value)+'"><canvas width="1" height="1"></canvas><span>'+esc(o.textContent)+'</span></div>').join('');
+  for(const r of pkList.querySelectorAll('.pko')) pkCanvas(r.querySelector('canvas'), pkNone(r.dataset.v)?'':lk(s,r.dataset.v));
+  pkDlg.showModal();
+  const on=pkList.querySelector('.on'); if(on) on.scrollIntoView({block:'center'});
+}
 showView();
-schBuild();load();setInterval(load,5000);
+pkInit();
+schBuild();load();gmLoad();
+setInterval(()=>{ load(); gmLoad(); },5000);
+gmStrip.addEventListener('scroll',gmArrows,{passive:true});
+window.addEventListener('resize',gmArrows);
+window.addEventListener('hashchange',gmLoad);
 </script></body></html>
 )HTML";
 

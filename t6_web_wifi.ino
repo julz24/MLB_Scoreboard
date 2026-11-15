@@ -86,6 +86,99 @@ void handleState() {
   server.send(200, "application/json", j);
 }
 
+// ---- Tuiles de matchs (page d'accueil) ----
+// Un objet par match des sports actifs : s sport (0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL),
+// a/h abreviations, ka/kh cles MLB (id), as/hs pointage, st etat (0 a venir, 1 direct, 2 final),
+// p periode/manche, c chrono, t heure, f drapeaux (1 prol., 2 tirs de barrage, 4 entracte/mi-temps,
+// 8 haut de manche, 16 reporte).
+static void gjAdd(String& j, int s, const char* a, const char* h, int as, int hs, int st, int p, const char* c, const char* t, int f) {
+  char b[160];
+  snprintf(b, sizeof(b), "%s{\"s\":%d,\"a\":\"%s\",\"h\":\"%s\",\"as\":%d,\"hs\":%d,\"st\":%d,\"p\":%d,\"c\":\"%s\",\"t\":\"%s\",\"f\":%d",
+           j.length() > 8 ? "," : "", s, a, h, as, hs, st, p, c, t, f);
+  j += b;
+}
+static void gjESPN(String& j, int s, const GameESPN* g, int n) {
+  for (int i = 0; i < n; i++)
+    { gjAdd(j, s, g[i].awayAbbr, g[i].homeAbbr, g[i].awayScore, g[i].homeScore, g[i].state, g[i].period, g[i].clockStr, g[i].timeStr,
+            (g[i].wasOT ? 1 : 0) | (g[i].halftime ? 4 : 0)); j += "}"; }
+}
+void handleGames() {
+  if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(300)) != pdTRUE) { server.send(503, "text/plain", "occupe"); return; }
+  String j; j.reserve(12000);
+  j = "{\"g\":[";
+  if (cfgSportNHL) for (int i = 0; i < gameCountNHL; i++) {
+    const GameNHL& g = gamesNHL[i];
+    gjAdd(j, 0, g.awayAbbr, g.homeAbbr, g.awayScore, g.homeScore, g.state, g.period, g.clockStr, g.timeStr,
+          (g.wasOT ? 1 : 0) | (g.wasSO ? 2 : 0) | (g.intermission ? 4 : 0)); j += "}";
+  }
+  if (cfgSportMLB) for (int i = 0; i < gameCount; i++) {
+    const Game& g = games[i];
+    gjAdd(j, 1, mlbAbbrById(g.awayId), mlbAbbrById(g.homeId), g.awayScore, g.homeScore, g.state, g.inning, "", g.timeStr,
+          (g.topInning ? 8 : 0) | (g.delayState == 4 ? 16 : 0));
+    j += ",\"ka\":\"" + String(g.awayId) + "\",\"kh\":\"" + String(g.homeId) + "\"}";
+  }
+  if (cfgSportNFL)  gjESPN(j, 2, gamesNFL, gameCountNFL);
+  if (cfgSportNBA)  gjESPN(j, 3, gamesNBA, gameCountNBA);
+  if (cfgSportNCAA) gjESPN(j, 4, gamesNCAA, gameCountNCAA);
+  if (cfgSportPWHL) for (int i = 0; i < gameCountPWHL; i++) {
+    const GamePWHL& g = gamesPWHL[i];
+    gjAdd(j, 5, g.awayAbbr, g.homeAbbr, g.awayScore, g.homeScore, g.state, g.period, "", g.timeStr,
+          (g.wasOT ? 1 : 0) | (g.wasSO ? 2 : 0) | (g.intermission ? 4 : 0)); j += "}";
+  }
+  bool fo = forceOn; int fs = forceSp; String fa = forceA, fh = forceH;
+  xSemaphoreGive(dataMutex);
+  j += "],\"force\":";
+  j += fo ? ("\"" + String(fs) + "|" + fa + "|" + fh + "\"") : String("\"\"");
+  j += "}";
+  server.send(200, "application/json", j);
+}
+
+// Logo d'une equipe tel qu'il est sur le panneau : 1 octet largeur, 1 octet hauteur, puis les pixels
+// RGB565 (petit-boutiste). /api/logo?s=<sport>&a=<abreviation, ou id MLB>
+void handleLogo() {
+  int s = server.arg("s").toInt();
+  String a = server.arg("a");
+  const uint16_t* px = nullptr; int w = 20, h = 20;
+  switch (s) {
+    case 0: px = nhlLogoForDisplay(a.c_str()); w = NHL_LOGO_W; h = NHL_LOGO_H; break;
+    case 1: px = mlbLogoById(a.toInt()); w = MLB_LOGO_W; h = MLB_LOGO_H; break;
+    case 2: px = nflLogoByAbbrev(a.c_str()); break;
+    case 3: px = nbaLogoByAbbrev(a.c_str()); break;
+    case 4: px = ncaaLogo(a.c_str()); break;
+    case 5: px = pwhlLogoByAbbrev(a.c_str()); break;
+  }
+  if (!px) { server.send(404, "text/plain", "aucun logo"); return; }
+  static uint8_t buf[2 + 28 * 28 * 2];
+  buf[0] = w; buf[1] = h;
+  for (int i = 0; i < w * h; i++) { uint16_t v = pgm_read_word(&px[i]); buf[2 + 2 * i] = v & 0xFF; buf[3 + 2 * i] = v >> 8; }
+  server.sendHeader("Cache-Control", "max-age=3600");
+  server.send_P(200, "application/octet-stream", (PGM_P)buf, 2 + w * h * 2);
+}
+
+// Clic sur une tuile : /api/show?s=<sport>&a=<visiteur>&h=<local> (MLB : ids).
+// Le match passe tout de suite au panneau 1 et y reste UNE etape (cfgRotationSec), puis la rotation reprend.
+void handleShow() {
+  int s = server.arg("s").toInt();
+  String a = server.arg("a"), h = server.arg("h");
+  if (s < 0 || s >= 6 || a.length() == 0 || a.length() > 5 || h.length() == 0 || h.length() > 5) { server.send(400, "text/plain", "parametres"); return; }
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  bool prevOn = forceOn; int8_t prevSp = forceSp; char pa[6], ph[6];
+  strcpy(pa, forceA); strcpy(ph, forceH);
+  forceOn = true; forceSp = s;
+  strcpy(forceA, a.c_str()); strcpy(forceH, h.c_str());
+  bool found = forcedIdx() >= 0;
+  if (found) {
+    lastRotate = millis();   // une etape complete a partir du clic
+    dirty = true;
+  } else {                   // match disparu entre-temps : on ne touche a rien
+    forceOn = prevOn; forceSp = prevSp; strcpy(forceA, pa); strcpy(forceH, ph);
+  }
+  xSemaphoreGive(dataMutex);
+  if (!found) { server.send(404, "text/plain", "match introuvable"); return; }
+  logAdd("Page web : match " + a + " @ " + h + " au panneau 1");
+  server.send(200, "text/plain", "ok");
+}
+
 void handleSet() {
   // Tout le bloc sous dataMutex : les favoris/toggles et les buildRotation*() touchent
   // les memes donnees (games*[], rotList*[]) que netTask reecrit pendant un fetch.

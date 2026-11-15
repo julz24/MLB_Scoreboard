@@ -193,19 +193,67 @@ static bool drawSportExtra(int k, int px, int* extra, int room, int* used) {
   return false;
 }
 
+// ---- Match force par la page web (forceOn) ----
+// (macro et non template : l'IDE Arduino genere mal les prototypes des templates)
+#define FIND_FORCED(G, N) do { for (int i = 0; i < (N); i++) if (strcmp(G[i].awayAbbr, forceA) == 0 && strcmp(G[i].homeAbbr, forceH) == 0) return i; return -1; } while (0)
+// Index du match force dans le tableau de son sport, -1 s'il n'y est plus (ou aucun).
+static int forcedIdx() {
+  if (!forceOn) return -1;
+  switch (forceSp) {
+    case 0: FIND_FORCED(gamesNHL, gameCountNHL);
+    case 1: { int a = atoi(forceA), h = atoi(forceH);
+              for (int i = 0; i < gameCount; i++) if (games[i].awayId == a && games[i].homeId == h) return i;
+              return -1; }
+    case 2: FIND_FORCED(gamesNFL, gameCountNFL);
+    case 3: FIND_FORCED(gamesNBA, gameCountNBA);
+    case 4: FIND_FORCED(gamesNCAA, gameCountNCAA);
+    case 5: FIND_FORCED(gamesPWHL, gameCountPWHL);
+  }
+  return -1;
+}
+// Dessine le match force a px ; renvoie le nombre de panneaux pris (0 = rien dessine).
+// LNH en direct avec "Affichage avec chronometre" : 2 panneaux, comme dans la rotation.
+static int drawForced(int px, int room) {
+  int i = forcedIdx();
+  if (i < 0) return 0;
+  switch (forceSp) {
+    case 0:
+      if (cfgWideNHL && gamesNHL[i].state == 1 && room >= 2) {
+        drawPanelNHL(px, gamesNHL[i]);
+        if (nhlClockPx < 0) { nhlClockPx = px; nhlClockIdx = i; strncpy(nhlClockHome, gamesNHL[i].homeAbbr, 3); nhlClockHome[3] = 0; }
+        return 2;
+      }
+      drawPanelNHLCompact(px, gamesNHL[i]); return 1;
+    case 1: drawPanel(px, games[i]); return 1;
+    case 2: drawPanelNFL(px, gamesNFL[i]); return 1;
+    case 3: drawPanelNBA(px, gamesNBA[i]); return 1;
+    case 4: drawPanelNCAA(px, gamesNCAA[i]); return 1;
+    case 5: drawPanelPWHL(px, gamesPWHL[i]); return 1;
+  }
+  return 0;
+}
+
 void renderUnified() {
   const int PX[4] = {0, 64, 128, 192};
   standShownN = 0;                // aucune division de classement affichee pour l'instant
   int s = 0;                      // prochain panneau libre
   int limit = cfgForceWeather ? 3 : 4;   // la meteo reserve le dernier panneau
 
+  // --- 0) Match choisi dans la page web : panneau 1, pour une etape. Il remplace le panneau
+  //        de son sport (pas de doublon) ; les autres sports suivent normalement. ---
+  int fSp = -1;
+  if (forceOn) {
+    int u = drawForced(PX[0], limit);
+    if (u > 0) { s = u; fSp = forceSp; }
+  }
+
   // --- 1) Favori NHL en direct : 2 panneaux, toujours a l'ecran ---
-  bool pinNhl = nhlFavLive() && limit >= 2;
+  bool pinNhl = nhlFavLive() && limit - s >= 2 && !(fSp == 0 && forcedIdx() == favIdxNHL);
   if (pinNhl) { drawSportPrimary(0, PX[s], true); s += 2; }
 
   // --- 2) Un panneau par sport actif (fenetre glissante s'il y en a trop) ---
   int rest[NSPORT], nr = 0;
-  for (int k = 0; k < NSPORT; k++) if (sportOn(k) && !(k == 0 && pinNhl)) rest[nr++] = k;
+  for (int k = 0; k < NSPORT; k++) if (sportOn(k) && !(k == 0 && pinNhl) && k != fSp) rest[nr++] = k;
   if (nr > limit - s) {
     // Plus de sports que de panneaux : on ne fait pas tourner les sports qui n'ont
     // rien a montrer (ni match, ni classement) - leur "AUCUN MATCH" volerait la

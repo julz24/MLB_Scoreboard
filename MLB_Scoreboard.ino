@@ -478,6 +478,12 @@ int    nhlSitCount = 0;
 #define FETCH_FAV_MS_NFL 15000UL // idem NFL
 
 int  sportWinRot = 0;       // fenetre de sports quand il y en a plus que de panneaux (voir renderUnified)
+// "Afficher ce match" (clic sur une tuile de la page web) : le match va au panneau 1 pendant UNE etape
+// de rotation (jusqu'au prochain tick), puis la rotation reprend. Retrouve par ses equipes a chaque rendu
+// (les index changent a chaque telechargement). forceSp : 0 NHL, 1 MLB (cles = id), 2 NFL, 3 NBA, 4 NCAA, 5 PWHL.
+bool   forceOn = false;
+int8_t forceSp = -1;
+char   forceA[6] = "", forceH[6] = "";
 
 // ====================== ALLOCATEUR PSRAM POUR ARDUINOJSON ======================
 // Les JsonDocument (~53KB pour les matchs) allouaient par defaut dans la RAM

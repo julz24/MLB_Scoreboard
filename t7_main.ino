@@ -158,6 +158,9 @@ void setup() {
   server.on("/api/state", handleState);
   server.on("/api/fw", handleFw);          // mise a jour depuis GitHub (t8_mise_a_jour.ino)
   server.on("/api/set", handleSet);
+  server.on("/api/games", handleGames);   // tuiles de matchs de la page d'accueil
+  server.on("/api/logo", handleLogo);     // logo d'une equipe (pixels du panneau) pour les tuiles
+  server.on("/api/show", handleShow);     // clic sur une tuile : ce match au panneau 1 pour une etape
   server.on("/api/logs", []() {
     // Copie sous mutex puis envoi hors mutex : netTask peut decaler logBuf a tout moment.
     static char logCopy[LOG_MAX + 1];
@@ -450,6 +453,7 @@ void loop() {
     sportWinRot = (sportWinRot + 1) % 60;   // fenetre de sports (60 = multiple de 1..6 : pas de saut quand le nombre de sports change)
     combinedStandRot++;   // classement combine MLB+NHL (drawStandingsCombined fait le modulo)
     freeSportRot = (freeSportRot + 1) % NSPORT;
+    forceOn = false;   // match choisi dans la page web : une seule etape, puis la rotation reprend
     dirty = true;
     xSemaphoreGive(dataMutex);
   }
