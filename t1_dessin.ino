@@ -1381,7 +1381,7 @@ void drawRankingNCAA(int px) {
 
 // NCAA "aucun match" : logo de l'equipe favorite (favSlot 0-5) ou logo NCAA.
 void drawNoGameNCAA(int px, int favSlot) {
-  const bool hasFav = (favSlot >= 0 && favSlot < 6 && cfgFavNCAA[favSlot][0] != 0);
+  const bool hasFav = (favSlot >= 0 && favSlot < 7 && cfgFavNCAA[favSlot][0] != 0);
   drawTeamLogoNFL(px + 5, 6, hasFav ? ncaaLogo(cfgFavNCAA[favSlot]) : LOGO_NCAA_NCAA);
   drawNoGameText(px);
 }

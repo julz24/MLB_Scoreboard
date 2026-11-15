@@ -133,7 +133,7 @@ struct Game {
 // (team.abbreviation) : NFL 3 caracteres, NBA jusqu'a 4 (UTAH), NCAA jusqu'a 5.
 #define MAX_GAMES_NFL  20
 #define MAX_GAMES_NBA  20
-#define MAX_GAMES_NCAA 40
+#define MAX_GAMES_NCAA 64
 struct GameESPN {
   char awayAbbr[6], homeAbbr[6];
   int  awayScore, homeScore;
@@ -238,8 +238,9 @@ bool     cfgLiveOnlyNBA  = false; // NBA : matchs en direct seulement
 bool     cfgShowStandNBA = true;  // afficher le classement NBA dans la rotation
 bool     cfgSportNCAA     = false; // NCAA football active (desactivee par defaut)
 bool     cfgNcaaConf[5]   = {true, true, true, true, true}; // ACC, Big 12, Big Ten, SEC, Pac-12
-// Favoris NCAA : 0 ACC, 1 Big 12, 2 Big Ten, 3 SEC, 4 Pac-12, 5 Top 25 (abreviation ESPN ; "" = aucun)
-char     cfgFavNCAA[6][6] = {"", "", "", "", "", ""};
+bool     cfgNcaaHors      = false; // Hors conference : matchs des equipes hors Power 5 (division FBS complete)
+// Favoris NCAA : 0 ACC, 1 Big 12, 2 Big Ten, 3 SEC, 4 Pac-12, 5 Top 25, 6 Hors conference (abreviation ESPN ; "" = aucun)
+char     cfgFavNCAA[7][6] = {"", "", "", "", "", "", ""};
 bool     cfgLiveOnlyNCAA  = false;
 bool     cfgShowStandNCAA = true; // afficher le Top 6 (et activer le favori "Top 25")
 
@@ -306,7 +307,8 @@ void loadCfg() {
   cfgNcaaConf[2] = prefs.getBool("cfB10", true);
   cfgNcaaConf[3] = prefs.getBool("cfSec", true);
   cfgNcaaConf[4] = prefs.getBool("cfP12", true);
-  for (int k = 0; k < 6; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); String fn = prefs.getString(key, ""); fn.toCharArray(cfgFavNCAA[k], 6); }
+  cfgNcaaHors = prefs.getBool("cfHors", false);
+  for (int k = 0; k < 7; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); String fn = prefs.getString(key, ""); fn.toCharArray(cfgFavNCAA[k], 6); }
   { String fn = prefs.getString("favNhl", ""); fn.toCharArray(cfgFavTeamNHL, sizeof(cfgFavTeamNHL)); }
   { String wc = prefs.getString("wxCity", ""); wc.toCharArray(cfgWxCity, sizeof(cfgWxCity)); }
   if (cfgWxCity[0]) {   // ville choisie : on reprend sa position memorisee (aucun appel reseau au boot)
@@ -362,7 +364,8 @@ void saveCfg() {
   prefs.putBool("cfB10", cfgNcaaConf[2]);
   prefs.putBool("cfSec", cfgNcaaConf[3]);
   prefs.putBool("cfP12", cfgNcaaConf[4]);
-  for (int k = 0; k < 6; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); prefs.putString(key, String(cfgFavNCAA[k])); }
+  prefs.putBool("cfHors", cfgNcaaHors);
+  for (int k = 0; k < 7; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); prefs.putString(key, String(cfgFavNCAA[k])); }
   prefs.putString("favNhl", String(cfgFavTeamNHL));
   prefs.putString("wxCity", String(cfgWxCity));
   if (!wxLocIsAuto && !isnan(wxLat) && !isnan(wxLon)) {   // position de la ville choisie
@@ -440,7 +443,7 @@ unsigned long lastFetchNBA = 0, lastStandNBA = 0;
 
 GameNCAA gamesNCAA[MAX_GAMES_NCAA];
 int  gameCountNCAA = 0;
-int  favListNCAA[6] = {-1, -1, -1, -1, -1, -1};   // index du match de chaque favori (-1 = pas de match)
+int  favListNCAA[7] = {-1, -1, -1, -1, -1, -1, -1};   // index du match de chaque favori (-1 = pas de match)
 int  favCountNCAA = 0;
 int  rotListNCAA[MAX_GAMES_NCAA];
 int  rotCountNCAA = 0, rotBaseNCAA = 0;
@@ -453,10 +456,10 @@ volatile bool rankForceNCAA = false;   // true = retelecharger le classement tou
 char top25Type[8] = "";                // sondage reellement charge ("ap" / "cfp"), "" = aucun
 bool rankValidNCAA = false;
 // Un favori NCAA n'est actif que si le toggle de SA section est a on (conferences 0-4 : toggle de la
-// conference ; 5 = Top 25 : toggle "Top 25"). Toggle a off -> ni match, ni "aucun match", ni telechargement.
+// conference ; 6 = toggle "Hors conference" ; 5 = ancien favori Top 25, toujours inactif). Toggle a off -> ni match, ni "aucun match", ni telechargement.
 bool ncaaFavActive(int k) {
-  if (k < 0 || k > 5 || cfgFavNCAA[k][0] == 0) return false;
-  return (k < 5) ? cfgNcaaConf[k] : cfgShowStandNCAA;
+  if (k < 0 || k > 6 || cfgFavNCAA[k][0] == 0) return false;
+  return (k < 5) ? cfgNcaaConf[k] : (k == 6) ? cfgNcaaHors : false;   // 5 = ancien favori "Top 25" (retire de la page web)
 }
 bool ncaaFetched = false;   // au moins un cycle de fetch termine (evite un "aucun match" au demarrage)
 unsigned long lastFetchNCAA = 0, lastStandNCAA = 0;

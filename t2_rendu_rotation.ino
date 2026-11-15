@@ -47,7 +47,7 @@ static int sportGameList(int k, int* out, int& pinned) {
     if (favIdxPWHL >= 0) { out[n++] = favIdxPWHL; pinned = 1; }
     for (int i = 0; i < rotCountPWHL && n < 48; i++) out[n++] = rotListPWHL[i];
   } else if (k == 4) {
-    for (int f = 0; f < 6; f++) {
+    for (int f = 0; f < 7; f++) {
       if (!ncaaFavActive(f) || favListNCAA[f] < 0) continue;
       bool dup = false;                                       // 2 favoris dans le meme match : une seule fois
       for (int j = 0; j < n; j++) if (out[j] == favListNCAA[f]) dup = true;
@@ -106,7 +106,7 @@ static void drawNewPrimary(int k, int px) {
   } else if (k == 4) {
     if (cfgShowStandNCAA && rankValidNCAA) { standMarkShown(64); drawRankingNCAA(px); return; }
     int slot = -1;                                            // 1er favori actif : son logo sur "aucun match"
-    if (ncaaFetched) for (int f = 0; f < 6; f++) if (ncaaFavActive(f)) { slot = f; break; }
+    if (ncaaFetched) for (int f = 0; f < 7; f++) if (ncaaFavActive(f)) { slot = f; break; }
     drawNoGameNCAA(px, slot);
   } else {
     drawNoGamePWHL(px);
@@ -348,11 +348,11 @@ void buildRotationPWHL() {
 void buildRotationNCAA() {
   favCountNCAA = 0;
   rotCountNCAA = 0;
-  for (int k = 0; k < 6; k++) favListNCAA[k] = -1;
+  for (int k = 0; k < 7; k++) favListNCAA[k] = -1;
   bool isFavGame[MAX_GAMES_NCAA];
   for (int i = 0; i < gameCountNCAA; i++) {
     isFavGame[i] = false;
-    for (int k = 0; k < 6; k++) {
+    for (int k = 0; k < 7; k++) {
       if (!ncaaFavActive(k)) continue;
       if (strcmp(gamesNCAA[i].awayAbbr, cfgFavNCAA[k]) == 0 || strcmp(gamesNCAA[i].homeAbbr, cfgFavNCAA[k]) == 0) {
         if (favListNCAA[k] < 0) { favListNCAA[k] = i; favCountNCAA++; }

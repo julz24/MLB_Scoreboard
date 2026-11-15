@@ -321,21 +321,22 @@ static void ncaaNoteMissingLogo(const char* ab) {
 // la fin du cycle. ncaaCycleDone = false -> le netTask rappelle bientot.
 // Un favori (n'importe laquelle des 6 listes) ?
 static bool ncaaIsFav(const char* ab) {
-  for (int k = 0; k < 6; k++) if (ncaaFavActive(k) && strcmp(cfgFavNCAA[k], ab) == 0) return true;
+  for (int k = 0; k < 7; k++) if (ncaaFavActive(k) && strcmp(cfgFavNCAA[k], ab) == 0) return true;
   return false;
 }
 static bool ncaaHasUnknownFav() {   // favori dont la conference est inconnue (equipe du Top 25 hors Power 4)
-  for (int k = 0; k < 6; k++) if (ncaaFavActive(k) && ncaaTeamConf(cfgFavNCAA[k]) < 0) return true;
+  for (int k = 0; k < 7; k++) if (ncaaFavActive(k) && ncaaTeamConf(cfgFavNCAA[k]) < 0) return true;
   return false;
 }
 static unsigned long ncaaExtraAt = 0;   // prochain telechargement "toute la division FBS" autorise
 // Conferences a telecharger : celles cochees + celle de chaque equipe favorite (meme decochee ;
 // seuls les matchs des favoris y sont alors gardes) + independants (Notre Dame) + en dernier
 // recours (slot 6) toute la division FBS pour un favori du Top 25 de conference inconnue.
+// Toggle "Hors conference" : la division FBS complete a chaque cycle (~70 Ko en gzip, 800 Ko decompresse).
 static bool ncaaConfWanted(int ci) {
   if (ci < 5 && cfgNcaaConf[ci]) return true;
-  if (ci == 6) return ncaaHasUnknownFav() && (long)(millis() - ncaaExtraAt) >= 0;
-  for (int k = 0; k < 6; k++) if (ncaaFavActive(k) && ncaaTeamConf(cfgFavNCAA[k]) == ci) return true;
+  if (ci == 6) return cfgNcaaHors || (ncaaHasUnknownFav() && (long)(millis() - ncaaExtraAt) >= 0);
+  for (int k = 0; k < 7; k++) if (ncaaFavActive(k) && ncaaTeamConf(cfgFavNCAA[k]) == ci) return true;
   return false;
 }
 static GameNCAA ncaaTmp[MAX_GAMES_NCAA];
@@ -345,6 +346,15 @@ static long ncaaListDay = -1;        // journee sportive de la liste affichee (g
 // Conference d'ou vient une equipe, comme ncaaConfWanted() : 0..5 = conference/independants, 6 = FBS complet.
 static int ncaaTeamSlot(const char* ab) { int c = ncaaTeamConf(ab); return c < 0 ? 6 : c; }
 bool ncaaCycleDone = true;
+// Match d'une equipe hors Power 5 de la division FBS : conferenceId ESPN American (151), Mountain West (17),
+// Sun Belt (37), Conference USA (12), MAC (15) ou independants (18). Les adversaires FCS ne comptent pas.
+static bool ncaaEvHors(JsonObject ev) {
+  for (JsonObject c : ev["competitions"][0]["competitors"].as<JsonArray>()) {
+    int cid = atoi(c["team"]["conferenceId"] | "0");
+    if (cid == 151 || cid == 17 || cid == 37 || cid == 12 || cid == 15 || cid == 18) return true;
+  }
+  return false;
+}
 
 bool fetchGamesNCAA() {
   struct tm tmNow;
@@ -363,9 +373,9 @@ bool fetchGamesNCAA() {
     ncaaNextConf = ci + 1;
     int blen = 0;
     bool skipDl = false;
-    if (ci == 6) {   // FBS complet : seulement si un favori de conference inconnue n'a pas ete trouve ailleurs
+    if (ci == 6 && !cfgNcaaHors) {   // FBS complet : seulement si un favori de conference inconnue n'a pas ete trouve ailleurs
       skipDl = true;
-      for (int k = 0; k < 6 && skipDl; k++) {
+      for (int k = 0; k < 7 && skipDl; k++) {
         if (!ncaaFavActive(k) || ncaaTeamConf(cfgFavNCAA[k]) >= 0) continue;
         bool found = false;
         for (int g = 0; g < ncaaTmpN; g++) if (strcmp(ncaaTmp[g].awayAbbr, cfgFavNCAA[k]) == 0 || strcmp(ncaaTmp[g].homeAbbr, cfgFavNCAA[k]) == 0) found = true;
@@ -375,11 +385,12 @@ bool fetchGamesNCAA() {
     }
     uint8_t* buf = skipDl ? nullptr : httpsDownload("fetchGamesNCAA", "site.api.espn.com",
                                 "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=" + String(confGroup[ci]) + "&limit=" + String(ci == 6 ? 400 : 100) + "&dates=" + dStrN,
-                                ci == 6 ? 4000000 : 1200000, blen, ci == 6 ? 70000UL : 45000UL);
+                                ci == 6 ? 2500000 : 1200000, blen, ci == 6 ? 70000UL : 45000UL);
     if (!buf && !skipDl) ncaaFailMask |= (1 << ci);
     if (buf) {
       JsonDocument filter;
       espnScoreboardFilter(filter);
+      filter["events"][0]["competitions"][0]["competitors"][0]["team"]["conferenceId"] = true;   // ncaaEvHors()
       JsonDocument doc(&psramAllocator);
       DeserializationError err = deserializeJson(doc, (char*)buf, blen,
                                                  DeserializationOption::Filter(filter),
@@ -391,12 +402,13 @@ bool fetchGamesNCAA() {
       } else {
         ncaaOkCount++;
         bool favOnly = (ci >= 5 || !cfgNcaaConf[ci]);   // conference telechargee pour les favoris seulement
+        bool horsAll = (ci == 6 && cfgNcaaHors);        // FBS complet : + tous les matchs hors Power 5
         for (JsonObject ev : doc["events"].as<JsonArray>()) {
           if (ncaaTmpN >= MAX_GAMES_NCAA) break;
           GameNCAA g;
           if (!espnParseEvent(ev, todayDay, g, 5)) continue;
           g.poss = 0;                                   // indicateur de possession : NFL seulement
-          if (favOnly && !ncaaIsFav(g.awayAbbr) && !ncaaIsFav(g.homeAbbr)) continue;
+          if (favOnly && !ncaaIsFav(g.awayAbbr) && !ncaaIsFav(g.homeAbbr) && !(horsAll && ncaaEvHors(ev))) continue;
           bool dup = false;                             // meme match deja recu par une autre conference
           for (int k = 0; k < ncaaTmpN; k++)
             if (strcmp(ncaaTmp[k].awayAbbr, g.awayAbbr) == 0 && strcmp(ncaaTmp[k].homeAbbr, g.homeAbbr) == 0) { dup = true; break; }

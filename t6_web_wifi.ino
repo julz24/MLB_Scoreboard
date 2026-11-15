@@ -60,16 +60,7 @@ void handleState() {
   j += ",\"showStNba\":" + String(cfgShowStandNBA ? "true" : "false");
   j += ",\"gamesNba\":" + String(gameCountNBA);
   j += ",\"spNcaa\":" + String(cfgSportNCAA ? "true" : "false");
-  for (int k = 0; k < 6; k++) j += ",\"favNc" + String(k) + "\":\"" + String(cfgFavNCAA[k]) + "\"";
-  j += ",\"top25\":[";
-  bool top25First = true;   // virgule selon "premier element ECRIT", pas selon k : un rang vide saute ne doit pas laisser [,"..."]
-  for (int k = 0; k < top25Count; k++) {
-    if (top25Abbr[k][0] == 0) continue;
-    String nm = String(top25Name[k]); nm.replace("\"", ""); nm.replace("\\", "");
-    j += String(top25First ? "" : ",") + "\"" + String(top25Abbr[k]) + "|" + nm + "\"";
-    top25First = false;
-  }
-  j += "]";
+  for (int k = 0; k < 7; k++) j += ",\"favNc" + String(k) + "\":\"" + String(cfgFavNCAA[k]) + "\"";
   j += ",\"liveNcaa\":" + String(cfgLiveOnlyNCAA ? "true" : "false");
   j += ",\"showStNcaa\":" + String(cfgShowStandNCAA ? "true" : "false");
   j += ",\"cfAcc\":" + String(cfgNcaaConf[0] ? "true" : "false");
@@ -77,6 +68,7 @@ void handleState() {
   j += ",\"cfB10\":" + String(cfgNcaaConf[2] ? "true" : "false");
   j += ",\"cfSec\":" + String(cfgNcaaConf[3] ? "true" : "false");
   j += ",\"cfP12\":" + String(cfgNcaaConf[4] ? "true" : "false");
+  j += ",\"cfHors\":" + String(cfgNcaaHors ? "true" : "false");
   j += ",\"gamesNcaa\":" + String(gameCountNCAA);
   {
     char pl[64] = "", cy[40] = ""; bool au = true; int st = 0;
@@ -173,9 +165,10 @@ void handleSet() {
     bool confChanged = false;
     for (int i = 0; i < 5; i++)
       if (server.hasArg(cfKeys[i])) { cfgNcaaConf[i] = server.arg(cfKeys[i]).toInt() == 1; confChanged = true; }
+    if (server.hasArg("cfHors")) { cfgNcaaHors = server.arg("cfHors").toInt() == 1; confChanged = true; }
     if (confChanged) { buildRotationNCAA(); dirty = true; if (cfgSportNCAA) lastFetchNCAA = millis() - FETCH_MS_SLOW - 1; }   // refetch pour appliquer le filtre
   }
-  for (int k = 0; k < 6; k++) {
+  for (int k = 0; k < 7; k++) {
     char key[8]; snprintf(key, sizeof(key), "favNc%d", k);
     if (!server.hasArg(key)) continue;
     String fn = server.arg(key);

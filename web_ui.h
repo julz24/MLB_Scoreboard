@@ -232,15 +232,18 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favNc4">Équipe favorite</label>
     <select id="favNc4" onchange="set('favNc4',this.value)"></select>
   </div>
+  <div class="row" style="margin-top:10px"><label id="t_cfHors" style="font-weight:600">Hors conférence</label>
+    <label class="sw"><input type="checkbox" id="cfHors" onchange="set('cfHors',this.checked?1:0)"><span class="sl"></span></label>
+  </div>
+  <div class="row"><label id="t_favNc6">Équipe favorite</label>
+    <select id="favNc6" onchange="set('favNc6',this.value)"></select>
+  </div>
   <div class="row" style="margin-top:10px"><label id="t_secTop25" style="font-weight:600">Top 25</label>
     <label class="sw"><input type="checkbox" id="showStNcaa" onchange="set('showStNcaa',this.checked?1:0)"><span class="sl"></span></label>
   </div>
   <div class="row"><label id="t_showStNcaaSub" style="color:var(--mut,#999)">Afficher le Top 6 dans la rotation</label></div>
-  <div class="row"><label id="t_rkCfp">Classement CFP (sinon AP)</label>
-    <label class="sw"><input type="checkbox" id="rkCfp" onchange="set('rkCfp',this.checked?1:0)"><span class="sl"></span></label>
-  </div>
-  <div class="row"><label id="t_favNc5">Équipe favorite</label>
-    <select id="favNc5" onchange="set('favNc5',this.value)"></select>
+  <div class="row"><label id="t_rkCfp">Classement AP</label>
+    <label class="sw"><input type="checkbox" id="rkCfp" onchange="set('rkCfp',this.checked?1:0);rkLbl()"><span class="sl"></span></label>
   </div>
 </div>
 
@@ -360,8 +363,8 @@ LAC:"Clippers",LAL:"Lakers",MEM:"Grizzlies",MIA:"Heat",MIL:"Bucks",MIN:"Timberwo
 NO:"Pelicans",NY:"Knicks",OKC:"Thunder",ORL:"Magic",PHI:"76ers",PHX:"Suns",
 POR:"Trail Blazers",SAC:"Kings",SA:"Spurs",TOR:"Raptors",UTAH:"Jazz",WSH:"Wizards"};
 
-const NCAA_CONF=[["BC","CLEM","DUKE","FSU","GT","MIA","NCST","PITT","SMU","STAN","SYR","UVA","VT","WAKE","CAL","LOU","UNC"],["ARIZ","ASU","BAY","BYU","CIN","COLO","HOU","ISU","KU","KSU","OKST","TCU","TTU","UCF","UTAH","WVU"],["ILL","IU","IOWA","MD","MICH","MSU","MINN","NEB","NU","OSU","ORE","PSU","PUR","RUTG","UCLA","USC","WASH","WIS"],["ALA","ARK","AUB","FLA","UGA","UK","LSU","MSST","MIZ","OU","MISS","SC","TENN","TEX","VAN","TA&M"],["BOIS","CSU","FRES","ORST","SDSU","TXST","USU","WSU"]];
-const NCAA_TEAMS={"BC":"Boston College","CLEM":"Clemson","DUKE":"Duke","FSU":"Florida State","GT":"Georgia Tech","MIA":"Miami","NCST":"NC State","PITT":"Pittsburgh","SMU":"SMU","STAN":"Stanford","SYR":"Syracuse","UVA":"Virginia","VT":"Virginia Tech","WAKE":"Wake Forest","CAL":"California","LOU":"Louisville","UNC":"North Carolina","ARIZ":"Arizona","ASU":"Arizona State","BAY":"Baylor","BYU":"BYU","CIN":"Cincinnati","COLO":"Colorado","HOU":"Houston","ISU":"Iowa State","KU":"Kansas","KSU":"Kansas State","OKST":"Oklahoma State","TCU":"TCU","TTU":"Texas Tech","UCF":"UCF","UTAH":"Utah","WVU":"West Virginia","ILL":"Illinois","IU":"Indiana","IOWA":"Iowa","MD":"Maryland","MICH":"Michigan","MSU":"Michigan State","MINN":"Minnesota","NEB":"Nebraska","NU":"Northwestern","OSU":"Ohio State","ORE":"Oregon","PSU":"Penn State","PUR":"Purdue","RUTG":"Rutgers","UCLA":"UCLA","USC":"USC","WASH":"Washington","WIS":"Wisconsin","ALA":"Alabama","ARK":"Arkansas","AUB":"Auburn","FLA":"Florida","UGA":"Georgia","UK":"Kentucky","LSU":"LSU","MSST":"Mississippi State","MIZ":"Missouri","OU":"Oklahoma","MISS":"Ole Miss","SC":"South Carolina","TENN":"Tennessee","TEX":"Texas","VAN":"Vanderbilt","TA&M":"Texas A&M","BOIS":"Boise State","CSU":"Colorado State","FRES":"Fresno State","ORST":"Oregon State","SDSU":"San Diego State","TXST":"Texas State","USU":"Utah State","WSU":"Washington State","ND":"Notre Dame"};
+const NCAA_CONF=[["BC","CLEM","DUKE","FSU","GT","MIA","NCST","PITT","SMU","STAN","SYR","UVA","VT","WAKE","CAL","LOU","UNC"],["ARIZ","ASU","BAY","BYU","CIN","COLO","HOU","ISU","KU","KSU","OKST","TCU","TTU","UCF","UTAH","WVU"],["ILL","IU","IOWA","MD","MICH","MSU","MINN","NEB","NU","OSU","ORE","PSU","PUR","RUTG","UCLA","USC","WASH","WIS"],["ALA","ARK","AUB","FLA","UGA","UK","LSU","MSST","MIZ","OU","MISS","SC","TENN","TEX","VAN","TA&M"],["BOIS","CSU","FRES","ORST","SDSU","TXST","USU","WSU"],["AFA","APP","ARST","CLT","CCU","DEL","ECU","FIU","FAU","GASO","GAST","HAW","JXST","JMU","KENN","LIB","UL","LT","MRSH","MEM","MTSU","MOST","NEV","UNM","NMSU","NDSU","UNT","NIU","ND","RICE","SHSU","SJSU","USA","USF","USM","TEM","TROY","TULN","TLSA","UAB","CONN","ULM","UNLV","UTEP","UTSA","WKU","WYO"]];
+const NCAA_TEAMS={"BC":"Boston College","CLEM":"Clemson","DUKE":"Duke","FSU":"Florida State","GT":"Georgia Tech","MIA":"Miami","NCST":"NC State","PITT":"Pittsburgh","SMU":"SMU","STAN":"Stanford","SYR":"Syracuse","UVA":"Virginia","VT":"Virginia Tech","WAKE":"Wake Forest","CAL":"California","LOU":"Louisville","UNC":"North Carolina","ARIZ":"Arizona","ASU":"Arizona State","BAY":"Baylor","BYU":"BYU","CIN":"Cincinnati","COLO":"Colorado","HOU":"Houston","ISU":"Iowa State","KU":"Kansas","KSU":"Kansas State","OKST":"Oklahoma State","TCU":"TCU","TTU":"Texas Tech","UCF":"UCF","UTAH":"Utah","WVU":"West Virginia","ILL":"Illinois","IU":"Indiana","IOWA":"Iowa","MD":"Maryland","MICH":"Michigan","MSU":"Michigan State","MINN":"Minnesota","NEB":"Nebraska","NU":"Northwestern","OSU":"Ohio State","ORE":"Oregon","PSU":"Penn State","PUR":"Purdue","RUTG":"Rutgers","UCLA":"UCLA","USC":"USC","WASH":"Washington","WIS":"Wisconsin","ALA":"Alabama","ARK":"Arkansas","AUB":"Auburn","FLA":"Florida","UGA":"Georgia","UK":"Kentucky","LSU":"LSU","MSST":"Mississippi State","MIZ":"Missouri","OU":"Oklahoma","MISS":"Ole Miss","SC":"South Carolina","TENN":"Tennessee","TEX":"Texas","VAN":"Vanderbilt","TA&M":"Texas A&M","BOIS":"Boise State","CSU":"Colorado State","FRES":"Fresno State","ORST":"Oregon State","SDSU":"San Diego State","TXST":"Texas State","USU":"Utah State","WSU":"Washington State","AFA":"Air Force","APP":"App State","ARST":"Arkansas State","CLT":"Charlotte","CCU":"Coastal Carolina","DEL":"Delaware","ECU":"East Carolina","FIU":"FIU","FAU":"Florida Atlantic","GASO":"Georgia Southern","GAST":"Georgia State","HAW":"Hawai'i","JXST":"Jacksonville State","JMU":"James Madison","KENN":"Kennesaw State","LIB":"Liberty","UL":"Louisiana","LT":"Louisiana Tech","MRSH":"Marshall","MEM":"Memphis","MTSU":"Middle Tennessee","MOST":"Missouri State","NEV":"Nevada","UNM":"New Mexico","NMSU":"New Mexico State","NDSU":"North Dakota State","UNT":"North Texas","NIU":"Northern Illinois","ND":"Notre Dame","RICE":"Rice","SHSU":"Sam Houston","SJSU":"San José State","USA":"South Alabama","USF":"South Florida","USM":"Southern Miss","TEM":"Temple","TROY":"Troy","TULN":"Tulane","TLSA":"Tulsa","UAB":"UAB","CONN":"UConn","ULM":"UL Monroe","UNLV":"UNLV","UTEP":"UTEP","UTSA":"UTSA","WKU":"Western Kentucky","WYO":"Wyoming"};
 
 // Codes HockeyTech (HomeCode/VisitorCode), verifies dans l'API pour la saison 2026-27.
 const PWHL_TEAMS={BOS:"Boston Fleet",MIN:"Minnesota Frost",MTL:"Montréal Victoire",
@@ -397,7 +400,6 @@ const TR={
   t_tdAnim:["Animation de touché (favori)","Touchdown animation (favorite)"],
   t_testNhl:["Tester","Test"],
   t_testNfl:["Tester","Test"],
-  t_rkCfp:["Classement CFP (sinon AP)","CFP ranking (otherwise AP)"],
   t_spNfl:["NFL","NFL"],
   t_liveNfl:["Matchs en direct seulement","Live games only"],
   t_liveNhl:["Matchs en direct seulement","Live games only"],
@@ -417,8 +419,8 @@ const TR={
   t_spNcaa:["NCAA","NCAA"],
   t_secTop25:["Top 25","Top 25"],
   t_showStNcaaSub:["Afficher le Top 6 dans la rotation","Show the Top 6 in the rotation"],
-  t_cfAcc:["ACC","ACC"],t_cfB12:["Big 12","Big 12"],t_cfB10:["Big Ten","Big Ten"],t_cfSec:["SEC","SEC"],t_cfP12:["Pac-12","Pac-12"],
-  t_favNc0:["Équipe favorite","Favorite team"],t_favNc1:["Équipe favorite","Favorite team"],t_favNc2:["Équipe favorite","Favorite team"],t_favNc3:["Équipe favorite","Favorite team"],t_favNc4:["Équipe favorite","Favorite team"],t_favNc5:["Équipe favorite","Favorite team"],
+  t_cfAcc:["ACC","ACC"],t_cfB12:["Big 12","Big 12"],t_cfB10:["Big Ten","Big Ten"],t_cfSec:["SEC","SEC"],t_cfP12:["Pac-12","Pac-12"],t_cfHors:["Hors conférence","Other conferences"],
+  t_favNc0:["Équipe favorite","Favorite team"],t_favNc1:["Équipe favorite","Favorite team"],t_favNc2:["Équipe favorite","Favorite team"],t_favNc3:["Équipe favorite","Favorite team"],t_favNc4:["Équipe favorite","Favorite team"],t_favNc6:["Équipe favorite","Favorite team"],
   t_liveNcaa:["Matchs en direct seulement","Live games only"],
   t_altLogoNhl:["Logo alternatif","Alternate logo"],
   t_speed:["Vitesse de rotation","Rotation speed"],
@@ -568,7 +570,16 @@ function sigTxt(r){
 // Une liste deroulante n'est reconstruite que si son contenu change : sinon le
 // rafraichissement aux 5 s refermait la liste pendant qu'on la consultait.
 function fillSel(sel, html){ if(sel.dataset.h!==html){ sel.innerHTML=html; sel.dataset.h=html; } }
+// Libelle du toggle CFP/AP : le classement choisi ; si celui reellement charge differe (CFP pas encore
+// publie, ou retelechargement en cours apres le changement), on l'indique.
+function rkLbl(){
+  const want=rkCfp.checked?'cfp':'ap', got=(lastState&&lastState.top25Poll)||'';
+  let t=lang==0?'Classement '+want.toUpperCase():want.toUpperCase()+' ranking';
+  if(got&&got!==want) t+=lang==0?' ('+got.toUpperCase()+' affiché)':' ('+got.toUpperCase()+' shown)';
+  document.getElementById('t_rkCfp').textContent=t;
+}
 function applyDynamic(s){
+  rkLbl();
   let o='<option value="0" '+(s.fav==0?'selected':'')+'>'+TRX.noneFav[lang]+'</option>';
   const sorted=Object.entries(TEAMS).sort((a,b)=>a[1].localeCompare(b[1]));
   for(const [id,name] of sorted)o+=`<option value="${id}" ${id==s.fav?'selected':''}>${name}</option>`;
@@ -598,17 +609,11 @@ function applyDynamic(s){
   for(const [ab,name] of sortedNba)o5+=`<option value="${ab}" ${ab==favNbaVal?'selected':''}>${name}</option>`;
   fillSel(favNba,o5);
 
-  // Un menu "Équipe favorite" par conference (0-4) + un pour le Top 25 (5, rempli avec le classement courant)
-  for(let k=0;k<6;k++){
+  // Un menu "Équipe favorite" par conference (0-4) et un pour les equipes hors conference (6, liste NCAA_CONF[5])
+  for(const k of [0,1,2,3,4,6]){
     const cur=s['favNc'+k]||"";
     let opts='<option value="" '+(cur==""?'selected':'')+'>'+TRX.noneFav[lang]+'</option>';
-    let list;
-    if(k<5){ list=NCAA_CONF[k].map(ab=>[ab,NCAA_TEAMS[ab]]).sort((a,b)=>a[1].localeCompare(b[1])); }
-    else{
-      list=(s.top25||[]).map((e,r)=>{const p=e.split('|'); return [p[0],'#'+(r+1)+' '+(p[1]||p[0])];});
-      if(cur&&!list.some(x=>x[0]==cur)) list.push([cur,NCAA_TEAMS[cur]||cur]);   // favori sorti du Top 25 : on le garde
-      if((s.top25Poll||'')!==(s.rkCfp?'cfp':'ap')&&s.top25Poll!==''&&typeof s.top25Poll!=='undefined') opts+='<option disabled>'+(lang==0?'Mise à jour du classement…':'Updating ranking…')+'</option>';
-    }
+    const list=NCAA_CONF[k<5?k:5].map(ab=>[ab,NCAA_TEAMS[ab]]).sort((a,b)=>a[1].localeCompare(b[1]));
     for(const [ab,name] of list) opts+=`<option value="${ab}" ${ab==cur?'selected':''}>${name}</option>`;
     fillSel(document.getElementById('favNc'+k),opts);
   }
@@ -636,7 +641,7 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   showStMlb.checked=s.showStMlb;showStNhl.checked=s.showStNhl;showStNfl.checked=s.showStNfl;
   if(typeof s.spPwhl!=='undefined'){ spPwhl.checked=s.spPwhl; livePwhl.checked=s.livePwhl; }
   if(typeof s.spNba!=='undefined'){ spNba.checked=s.spNba; liveNba.checked=s.liveNba; showStNba.checked=s.showStNba; }
-  if(typeof s.spNcaa!=='undefined'){ spNcaa.checked=s.spNcaa; liveNcaa.checked=s.liveNcaa; showStNcaa.checked=s.showStNcaa; rkCfp.checked=!!s.rkCfp; cfAcc.checked=s.cfAcc; cfB12.checked=s.cfB12; cfB10.checked=s.cfB10; cfSec.checked=s.cfSec; cfP12.checked=s.cfP12; }
+  if(typeof s.spNcaa!=='undefined'){ spNcaa.checked=s.spNcaa; liveNcaa.checked=s.liveNcaa; showStNcaa.checked=s.showStNcaa; rkCfp.checked=!!s.rkCfp; cfAcc.checked=s.cfAcc; cfB12.checked=s.cfB12; cfB10.checked=s.cfB10; cfSec.checked=s.cfSec; cfP12.checked=s.cfP12; cfHors.checked=!!s.cfHors; }
   applyDynamic(s);
   schApply(s);
   showWx(s);
