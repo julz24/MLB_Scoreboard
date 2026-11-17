@@ -520,7 +520,7 @@ const TRX={
   gmSent:["Au panneau 1","On panel 1"],
   gmGone:["Ce match n'est plus dans la liste","This game is no longer listed"],
   noneFav:["Aucun (rotation complète)","None (full rotation)"],
-  sched:["matchs a l'horaire aujourd'hui","games scheduled today"],
+  sched:["matchs à l'horaire aujourd'hui","games scheduled today"],
   logsShow:["Voir les logs","View logs"],
   logsHide:["Masquer les logs","Hide logs"],
   logsEmpty:["(aucun log pour le moment)","(no logs yet)"],
