@@ -5,6 +5,137 @@
 // ============================================================
 
 #include "web_ui.h"
+#include "mdns.h"   // API mDNS d'ESP-IDF : nom modifiable sans redemarrer, recherche asynchrone des autres tableaux
+
+// ====================== NOM DU TABLEAU ET AUTRES TABLEAUX ======================
+// Chaque tableau s'annonce en mDNS sous <nom>.local avec le service _scoreboard._tcp (TXT p = panneaux,
+// v = version). La page d'accueil liste les autres tableaux trouves sur le meme WiFi.
+
+// Nom permis : minuscules, chiffres, tirets (pas en debut ni en fin), 24 caracteres. Meme regle que la web UI.
+String cleanBoardName(const String& in) {
+  String o; bool dash = false;
+  for (size_t i = 0; i < in.length(); i++) {
+    char c = tolower((unsigned char)in[i]);
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+      if (dash && o.length()) { if (o.length() >= 23) break; o += '-'; }
+      dash = false;
+      if (o.length() >= 24) break;
+      o += c;
+    } else dash = true;
+  }
+  return o;
+}
+
+// Nom reellement annonce : si un autre appareil a deja ce nom, le mDNS en prend un autre (nom-2).
+String boardHost() {
+  char h[64] = "";
+  if (mdns_hostname_get(h) == ESP_OK && h[0]) return String(h);
+  return String(cfgName);
+}
+
+void mdnsStart() {
+  if (!MDNS.begin(cfgName)) { logAdd("mDNS: echec du demarrage"); return; }
+  MDNS.addService("http", "tcp", 80);
+  MDNS.addService("scoreboard", "tcp", 80);
+  MDNS.addServiceTxt("scoreboard", "tcp", "p", String(cfgPanels));
+  MDNS.addServiceTxt("scoreboard", "tcp", "v", FW_VERSION);
+  logAdd("mDNS: http://" + String(cfgName) + ".local");
+}
+
+// Nouveau nom choisi dans la web UI : applique tout de suite (mDNS), et au DHCP au prochain bail.
+void boardRename() {
+  mdns_hostname_set(cfgName);
+  mdns_instance_name_set(cfgName);
+  WiFi.setHostname(cfgName);
+  logAdd("Nom du tableau: " + String(cfgName) + " -> http://" + String(cfgName) + ".local");
+}
+
+// --- Recherche des autres tableaux : lancee par la page d'accueil (/api/boards), au plus aux 30 s,
+//     resultats recuperes par loop() sans bloquer (la recherche dure 3 s). ---
+#define MAX_BOARDS 8
+struct BoardInfo { char name[25]; char ip[16]; uint8_t panels; };
+BoardInfo boards[MAX_BOARDS];
+int boardCount = 0;
+static mdns_search_once_t* boardSearch = nullptr;
+static unsigned long boardScanAt = 0;
+static bool boardScanned = false;
+
+void boardScanStart() {
+  if (boardSearch || (boardScanned && millis() - boardScanAt < 30000)) return;
+  boardScanned = true;
+  boardScanAt = millis();
+  boardSearch = mdns_query_async_new(NULL, "_scoreboard", "_tcp", MDNS_TYPE_PTR, 3000, MAX_BOARDS + 4, NULL);
+}
+
+void boardScanStep() {
+  if (!boardSearch) return;
+  mdns_result_t* res = nullptr;
+  uint8_t n = 0;
+  if (!mdns_query_async_get_results(boardSearch, 0, &res, &n)) return;   // recherche pas finie
+  mdns_query_async_delete(boardSearch);
+  boardSearch = nullptr;
+  String me = WiFi.localIP().toString();
+  int c = 0;
+  for (mdns_result_t* r = res; r && c < MAX_BOARDS; r = r->next) {
+    char ip[16] = "";
+    for (mdns_ip_addr_t* a = r->addr; a; a = a->next)
+      if (a->addr.type == ESP_IPADDR_TYPE_V4) { snprintf(ip, sizeof(ip), IPSTR, IP2STR(&a->addr.u_addr.ip4)); break; }
+    if (!ip[0] || me == ip) continue;                       // pas d'adresse, ou ce tableau-ci
+    bool dup = false;
+    for (int i = 0; i < c; i++) if (!strcmp(boards[i].ip, ip)) dup = true;
+    if (dup) continue;
+    BoardInfo& b = boards[c];
+    strlcpy(b.name, r->hostname ? r->hostname : (r->instance_name ? r->instance_name : "?"), sizeof(b.name));
+    b.panels = 0;
+    for (size_t t = 0; t < r->txt_count; t++)
+      if (r->txt[t].key && r->txt[t].value && !strcmp(r->txt[t].key, "p")) b.panels = atoi(r->txt[t].value);
+    strlcpy(b.ip, ip, sizeof(b.ip));
+    c++;
+  }
+  if (res) mdns_query_results_free(res);
+  boardCount = c;
+}
+
+void handleBoards() {
+  boardScanStart();
+  String j = "{\"b\":[";
+  for (int i = 0; i < boardCount; i++) {
+    if (i) j += ",";
+    j += "{\"n\":\"" + wxJsonEsc(boards[i].name) + "\",\"ip\":\"" + String(boards[i].ip) + "\",\"p\":" + String(boards[i].panels) + "}";
+  }
+  j += "]}";
+  server.send(200, "application/json", j);
+}
+
+// --- "Afficher l'adresse" (et confirmation d'un nouveau nom) : <nom>.local et l'IP, plein ecran ---
+unsigned long identUntil = 0;
+bool identDrawn = false;
+void identShow(unsigned long ms) { identUntil = millis() + ms; identDrawn = false; }
+
+static void identLine(const String& s, int y, int size, uint16_t col) {
+  int w = (int)s.length() * 6 * size - size;
+  dma->setTextSize(size);
+  dma->setTextColor(col);
+  dma->setCursor(max(0, (W - w) / 2), y);
+  dma->print(s);
+}
+static void drawIdent() {
+  dma->fillScreen(0);
+  dma->setFont();
+  dma->setTextWrap(false);
+  String host = boardHost() + ".local";
+  if ((int)host.length() * 6 - 1 > W) host = boardHost();          // trop long pour 2 panneaux : sans ".local"
+  int sz = ((int)host.length() * 12 - 2 <= W - 4) ? 2 : 1;
+  identLine(host, sz == 2 ? 2 : 6, sz, C(239, 159, 39));
+  identLine(WiFi.localIP().toString(), 22, 1, C(255, 255, 255));
+}
+// Vrai tant que l'adresse est a l'ecran (loop() ne dessine rien d'autre).
+bool identTick(unsigned long now) {
+  if (!identUntil) return false;
+  if ((long)(now - identUntil) >= 0) { identUntil = 0; dirty = true; return false; }
+  if (!identDrawn) { drawIdent(); dma->show(); identDrawn = true; }
+  return true;
+}
 
 void applyLive() { dma->setBrightness8(cfgBright); }
 
@@ -37,6 +168,15 @@ void handleState() {
   j += ",\"fwProg\":" + String(fwProgress);
   j += ",\"fwErr\":" + String(fwErrCode);
   j += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+  j += ",\"name\":\"" + String(cfgName) + "\"";
+  j += ",\"host\":\"" + boardHost() + "\"";
+  j += ",\"panels\":" + String(cfgPanels);
+  j += ",\"panWant\":" + String(panFailWant);
+  { const esp_partition_t* run = esp_ota_get_running_partition();   // espace programme : firmware / partition
+    j += ",\"appUsed\":" + String(ESP.getSketchSize()) + ",\"appSlot\":" + String(run ? run->size : 0); }
+  j += ",\"pins\":[";
+  for (int k = 0; k < 7; k++) j += (k ? "," : "") + String(cfgPin[k]);
+  j += "]";
   j += ",\"rssi\":" + String(WiFi.RSSI());
   j += ",\"games\":" + String(gameCount);
   j += ",\"favidx\":" + String(favIdx);
@@ -190,7 +330,16 @@ void handleShow() {
 void handleSet() {
   // Tout le bloc sous dataMutex : les favoris/toggles et les buildRotation*() touchent
   // les memes donnees (games*[], rotList*[]) que netTask reecrit pendant un fetch.
+  bool renamed = false, panelsChanged = false;
   xSemaphoreTake(dataMutex, portMAX_DELAY);
+  if (server.hasArg("name")) {      // nom du tableau sur le reseau
+    String nm = cleanBoardName(server.arg("name"));
+    if (nm.length() && nm != cfgName) { nm.toCharArray(cfgName, sizeof(cfgName)); renamed = true; }
+  }
+  if (server.hasArg("panels")) {    // nombre de panneaux : enregistre puis redemarrage
+    int p = server.arg("panels").toInt();
+    if (p >= PANELS_MIN && p <= PANELS_MAX && p != cfgPanels) { cfgPanels = p; panFailWant = 0; panelsChanged = true; }
+  }
   if (server.hasArg("bright")) { cfgBright = constrain(server.arg("bright").toInt(), 5, 255); applyLive(); }
   if (server.hasArg("speed"))  { cfgRotationSec = constrain(server.arg("speed").toInt(), 3, 30); }
   if (server.hasArg("fav"))    { cfgFavTeam = server.arg("fav").toInt(); buildRotation(); }
@@ -288,6 +437,16 @@ void handleSet() {
     buildRotationNCAA();
     if (cfgSportNCAA) lastFetchNCAA = millis() - FETCH_MS_SLOW - 1;   // sa conference n'est peut-etre pas encore telechargee
   }
+  for (int k = 0; k < 7; k++) {    // epingler un sport : pin0..pin6 = numero du panneau (0 = rotation)
+    char key[6]; snprintf(key, sizeof(key), "pin%d", k);
+    if (!server.hasArg(key)) continue;
+    int p = server.arg(key).toInt();
+    if (p < 0 || p > cfgPanels || (cfgForceWeather && p == cfgPanels)) p = 0;   // pas de panneau inexistant ni celui de la meteo
+    if (p) for (int o = 0; o < 7; o++) if (o != k && cfgPin[o] == p) cfgPin[o] = 0;   // un seul sport par panneau : l'autre retourne dans la rotation
+    cfgPin[k] = p;
+  }
+  // Meteo activee ou moins de panneaux : un sport epingle sur un panneau devenu indisponible retourne dans la rotation.
+  for (int k = 0; k < 7; k++) if (cfgPin[k] > cfgPanels || (cfgForceWeather && cfgPin[k] == cfgPanels)) cfgPin[k] = 0;
   if (server.hasArg("wxCity")) {   // ville de la meteo ("" = automatique par IP)
     String c = server.arg("wxCity");
     c.trim();
@@ -298,9 +457,17 @@ void handleSet() {
   }
   dirty = true;
   xSemaphoreGive(dataMutex);
-  // Sauvegarde NVS differee (voir flushCfg). Le bouton "Tester" seul ne change aucun reglage.
-  if (!server.hasArg("testGoal")) { cfgSaveAt = millis(); cfgSavePending = true; }
+  // Sauvegarde NVS differee (voir flushCfg). Les boutons "Tester" et "Afficher l'adresse" ne changent aucun reglage.
+  if (!server.hasArg("testGoal") && !server.hasArg("ident")) { cfgSaveAt = millis(); cfgSavePending = true; }
+  if (renamed) { boardRename(); identShow(8000); }        // confirmation au tableau : sa nouvelle adresse
+  if (server.hasArg("ident")) identShow(10000);
   server.send(200, "text/plain", "ok");
+  if (panelsChanged) {
+    logAdd("Panneaux: " + String(cfgPanels) + " -> redemarrage");
+    flushCfg();
+    delay(500);
+    ESP.restart();
+  }
 }
 
 // ====================== WIFI : identifiants NVS ======================
@@ -364,7 +531,7 @@ bool connectSTA() {
   loadWifi();
   if (staSsid.length() == 0) return false;       // vide -> portail
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(HOSTNAME);
+  WiFi.setHostname(cfgName);
   WiFi.setAutoReconnect(true);   // explicite : se reconnecte seul si le routeur redemarre en cours de route
   WiFi.begin(staSsid.c_str(), staPass.c_str());
   Serial.printf("Connexion a \"%s\" ", staSsid.c_str());
@@ -408,6 +575,7 @@ void portalShowPanel() {
   dma->setCursor(2, 12); dma->print(AP_NAME);
   dma->setTextColor(C(150, 150, 150));
   dma->setCursor(2, 23); dma->print("192.168.4.1");
+  dma->show();
 }
 
 void handlePortalRoot() { server.send_P(200, "text/html", PORTAL_HTML); }

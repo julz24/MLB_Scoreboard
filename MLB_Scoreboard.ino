@@ -26,7 +26,9 @@
      version.h, sport_util.h, web_ui.h, logos_*.h
    L'IDE Arduino colle les onglets t1..t7 a la suite de ce fichier (ordre
    alphabetique) : l'ordre des declarations est donc celui des numeros.
-   Partition recommandee : "Minimal SPIFFS (1.9MB APP with OTA)"
+   Partition : "Minimal SPIFFS (1.9MB APP with OTA)" (Outils > Partition Scheme).
+   Quand le firmware ne tiendra plus : "16M Flash (3MB APP/9.9MB FATFS)" (2 x 3 Mo),
+   a installer une seule fois par USB sur chaque tableau.
    ============================================================ */
 
 #include <WiFi.h>
@@ -41,6 +43,7 @@
 #include <ESPmDNS.h>
 #include <ElegantOTA.h>
 #include <Update.h>             // mise a jour depuis GitHub (t8_mise_a_jour.ino)
+#include <esp_ota_ops.h>        // taille de la partition du firmware (installation USB requise ?)
 #include <mbedtls/sha256.h>     // controle SHA-256 du firmware telecharge
 #include "miniz.h"              // decompresseur deflate de la ROM ESP32 (reponses gzip, voir gzipReceive)
 #include "version.h"            // FW_VERSION, FW_REPO
@@ -77,7 +80,8 @@
 // ils sont stockes en NVS (cles "wssid"/"wpass") et survivent au reflash.
 const char* WIFI_SSID = "";   // vide : le WiFi se configure par le portail au 1er demarrage
 const char* WIFI_PASS = "";
-const char* HOSTNAME  = "scoreboard";        // -> http://scoreboard.local
+#define DEFAULT_NAME "scoreboard"            // nom par defaut -> http://scoreboard.local
+char cfgName[25] = DEFAULT_NAME;             // nom du tableau sur le reseau (mDNS + DHCP), modifiable dans la web UI
 const char* AP_NAME   = "Scoreboard-Setup";  // reseau de config si pas de connexion
 const char* AP_PASS   = "scoreboard123";     // min 8 caracteres (ou "" pour ouvert)
 #define WIFI_CONNECT_TIMEOUT_S 18            // secondes avant de basculer en portail
@@ -89,8 +93,14 @@ String staSsid, staPass;
 // ====================== GEOMETRIE ======================
 #define PANEL_RES_X 64
 #define PANEL_RES_Y 32
-#define PANEL_CHAIN 4
-const int W = PANEL_RES_X * PANEL_CHAIN;  // 256
+#define PANELS_MIN 2
+#define PANELS_MAX 6
+// Nombre de panneaux en une rangee : reglage de la web UI, applique au demarrage (la memoire de
+// l'image est reservee une seule fois par initPanel). Si un tableau a 5-6 panneaux ne peut pas
+// demarrer (memoire), il revient a 4 et panFailWant garde le nombre demande pour la web UI.
+uint8_t cfgPanels   = 4;
+uint8_t panFailWant = 0;
+int W = PANEL_RES_X * 4;                  // largeur de l'ecran en px (cfgPanels x 64), fixee par initPanel()
 const int H = PANEL_RES_Y;                // 32
 
 // ---- Pinout HUB75 -> ESP32-S3 (valide au test) ----
@@ -109,7 +119,62 @@ const int H = PANEL_RES_Y;                // 32
 #define OE_PIN  21
 #define CLK_PIN 2
 
-MatrixPanel_I2S_DMA* dma = nullptr;
+// ====================== ECRAN VIRTUEL (anti-scintillement) ======================
+// Tout le dessin (dma->...) se fait dans une image en PSRAM ; dma->show() copie ensuite vers
+// les panneaux SEULEMENT les pixels qui ont change depuis la copie precedente. Avant, render()
+// effacait tout l'ecran en noir puis redessinait pendant que le DMA affichait : ce passage par
+// le noir se voyait (surtout a 6 panneaux, plus longs a redessiner). Maintenant chaque pixel
+// passe directement de l'ancienne couleur a la nouvelle, et ce qui ne change pas n'est pas
+// touche. Sans PSRAM disponible : dessin direct sur les panneaux, comme avant.
+MatrixPanel_I2S_DMA* hw = nullptr;   // les vrais panneaux
+class FrameCanvas : public Adafruit_GFX {
+ public:
+  FrameCanvas(int16_t w, int16_t h) : Adafruit_GFX(w, h) {
+    buf   = (uint16_t*)heap_caps_calloc((size_t)w * h, 2, MALLOC_CAP_SPIRAM);
+    shown = (uint16_t*)heap_caps_calloc((size_t)w * h, 2, MALLOC_CAP_SPIRAM);
+    if (!buf || !shown) { free(buf); free(shown); buf = shown = nullptr; }
+  }
+  bool buffered() const { return buf != nullptr; }
+  void drawPixel(int16_t x, int16_t y, uint16_t c) override {
+    if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return;
+    if (!buf) { hw->drawPixel(x, y, c); return; }
+    buf[y * WIDTH + x] = c;
+    changed = true;
+  }
+  void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) override {
+    if (!buf) { hw->fillRect(x, y, w, h, c); return; }
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > WIDTH)  w = WIDTH - x;
+    if (y + h > HEIGHT) h = HEIGHT - y;
+    if (w <= 0 || h <= 0) return;
+    for (int r = y; r < y + h; r++) { uint16_t* p = buf + r * WIDTH + x; for (int i = 0; i < w; i++) p[i] = c; }
+    changed = true;
+  }
+  void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t c) override { fillRect(x, y, w, 1, c); }
+  void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t c) override { fillRect(x, y, 1, h, c); }
+  void fillScreen(uint16_t c) override { fillRect(0, 0, WIDTH, HEIGHT, c); }
+  uint16_t color565(uint8_t r, uint8_t g, uint8_t b) { return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3); }
+  void setBrightness8(uint8_t b) { hw->setBrightness8(b); }
+  // Copie vers les panneaux. all = recopie tout (apres un dessin direct sur hw, ex. ecran de demarrage).
+  // Ordre des lignes : y puis y+16 (balayage 1/16 des panneaux), les deux moities changent ensemble.
+  void show(bool all = false) {
+    if (!buf || (!changed && !all)) return;
+    changed = false;
+    for (int yi = 0; yi < HEIGHT; yi++) {
+      int y = (yi >> 1) + ((yi & 1) ? HEIGHT / 2 : 0);
+      uint16_t* a = buf + y * WIDTH;
+      uint16_t* s = shown + y * WIDTH;
+      for (int x = 0; x < WIDTH; x++)
+        if (all || a[x] != s[x]) { s[x] = a[x]; hw->drawPixel(x, y, a[x]); }
+    }
+  }
+ private:
+  uint16_t* buf = nullptr;
+  uint16_t* shown = nullptr;
+  bool changed = false;
+};
+FrameCanvas* dma = nullptr;          // ecran virtuel : tout le code dessine ici
 WebServer server(80);
 Preferences prefs;
 
@@ -251,6 +316,9 @@ char     cfgFavTeamCFL[4] = "";    // code CFL favori (MTL, WPG, BC...) ; "" = a
 bool     cfgLiveOnlyCFL   = false; // CFL : matchs en direct seulement
 bool     cfgShowStandCFL  = true;  // classement Est / Ouest dans la rotation
 bool     cfgAltLogoCFL    = false; // logos alternatifs CFL (fichiers "ALT - ...")
+// Epingler un sport a un panneau : cfgPin[sport] = numero du panneau (1 = gauche), 0 = dans la rotation.
+// Ordre des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL (comme renderUnified).
+uint8_t  cfgPin[7]        = {0, 0, 0, 0, 0, 0, 0};
 
 // ----- Position de la meteo (plus aucune ville/cle ecrite en dur) -----
 // Par defaut : AUTOMATIQUE = geolocalisation de l'adresse IP publique de la
@@ -324,6 +392,11 @@ void loadCfg() {
   for (int k = 0; k < 7; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); String fn = prefs.getString(key, ""); fn.toCharArray(cfgFavNCAA[k], 6); }
   { String fn = prefs.getString("favNhl", ""); fn.toCharArray(cfgFavTeamNHL, sizeof(cfgFavTeamNHL)); }
   { String wc = prefs.getString("wxCity", ""); wc.toCharArray(cfgWxCity, sizeof(cfgWxCity)); }
+  { String bn = prefs.getString("bname", DEFAULT_NAME); bn.toCharArray(cfgName, sizeof(cfgName)); if (!cfgName[0]) strcpy(cfgName, DEFAULT_NAME); }
+  cfgPanels   = constrain(prefs.getUChar("panels", 4), PANELS_MIN, PANELS_MAX);
+  panFailWant = prefs.getUChar("panFail", 0);
+  if (prefs.getBytesLength("pins") == sizeof(cfgPin)) prefs.getBytes("pins", cfgPin, sizeof(cfgPin));
+  for (int k = 0; k < 7; k++) if (cfgPin[k] > PANELS_MAX) cfgPin[k] = 0;
   if (cfgWxCity[0]) {   // ville choisie : on reprend sa position memorisee (aucun appel reseau au boot)
     float la = prefs.getFloat("wxLat", NAN), lo = prefs.getFloat("wxLon", NAN);
     if (!isnan(la) && !isnan(lo)) {
@@ -386,6 +459,10 @@ void saveCfg() {
   for (int k = 0; k < 7; k++) { char key[8]; snprintf(key, sizeof(key), "fnc%d", k); prefs.putString(key, String(cfgFavNCAA[k])); }
   prefs.putString("favNhl", String(cfgFavTeamNHL));
   prefs.putString("wxCity", String(cfgWxCity));
+  prefs.putString("bname", String(cfgName));
+  prefs.putUChar("panels", cfgPanels);
+  prefs.putUChar("panFail", panFailWant);
+  prefs.putBytes("pins", cfgPin, sizeof(cfgPin));
   if (!wxLocIsAuto && !isnan(wxLat) && !isnan(wxLon)) {   // position de la ville choisie
     prefs.putFloat("wxLat", wxLat);
     prefs.putFloat("wxLon", wxLon);
@@ -579,7 +656,7 @@ char     fwNotes[1500] = "";          // nouveautes de la derniere version (text
 // garder le meme ordre des deux cotes.
 enum { FW_E_NONE, FW_E_CONFIG, FW_E_UNREACHABLE, FW_E_BAD_REPLY, FW_E_NO_RELEASE, FW_E_NO_FILE,
        FW_E_NO_CHECKSUM, FW_E_REFUSED, FW_E_SIZE, FW_E_NO_ROOM, FW_E_WRITE, FW_E_INTERRUPTED,
-       FW_E_CHECKSUM, FW_E_INVALID, FW_E_BAD_URL };
+       FW_E_CHECKSUM, FW_E_INVALID, FW_E_BAD_URL, FW_E_USB };
 unsigned long lastFetch = 0, lastRotate = 0;
 const unsigned long FETCH_MS = 30000;      // intervalle si au moins un match est en direct
 const unsigned long FETCH_MS_SLOW = 900000; // intervalle sinon (15 min) - reduit la frequence de connexions reseau quand rien ne se passe (etait 5 min)

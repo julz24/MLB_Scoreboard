@@ -77,6 +77,13 @@ bool fwCheck() {
   strncpy(fwNotes, body, sizeof(fwNotes) - 1); fwNotes[sizeof(fwNotes) - 1] = 0;
   fwErrCode = FW_E_NONE;
   fwStat = (latest > have) ? FW_AVAILABLE : FW_UP_TO_DATE;
+  // Nouveau firmware plus gros que la partition de ce tableau (ancienne disposition "Minimal
+  // SPIFFS", 1,9 Mo) : impossible par le WiFi, la web UI demande une installation par USB.
+  const esp_partition_t* slot = esp_ota_get_next_update_partition(NULL);
+  if (fwStat == FW_AVAILABLE && slot && fwSize > slot->size) {
+    fwSetError(FW_E_USB, ("version " + String(fwLatest) + " trop grosse pour la partition (" + String(fwSize) + " > " + String(slot->size) + " octets) : installation par USB").c_str());
+    return true;
+  }
   logAdd("MAJ: version installee " FW_VERSION ", derniere release " + String(fwLatest) +
          (fwStat == FW_AVAILABLE ? " -> mise a jour disponible" : " -> a jour"));
   return true;
@@ -95,6 +102,7 @@ static void fwPanel(int pct) {
   dma->setTextColor(C(150, 150, 150));
   dma->setCursor(2, 24);
   dma->print(T("Ne pas debrancher", "Do not unplug"));
+  dma->show();
 }
 
 // Telecharge et installe fwUrl. Ne revient pas en cas de succes (redemarrage).

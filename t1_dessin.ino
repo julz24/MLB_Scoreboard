@@ -1063,13 +1063,16 @@ static void animStart() {
   if (!anim.mask) return;                      // plus de RAM : on saute l'animation
   anim.mask->fillScreen(0);
   anim.mask->setTextWrap(false);
-  anim.mask->setTextSize(3);                   // 18 x 24 px par caractere
+  // Police x3 (18 x 24 px par caractere) ; plus petite si le texte et les deux logos ne tiennent pas
+  // (tableau de 2-3 panneaux).
+  int sz = 3, tw;
+  for (;; sz--) { tw = (int)strlen(txt) * 6 * sz - sz; if (sz == 1 || tw + 2 * (ls + 6) <= W) break; }
+  anim.mask->setTextSize(sz);
   anim.mask->setTextColor(1);
-  int tw = (int)strlen(txt) * 18 - 3;
-  int x0 = (W - tw) / 2, y0 = 4;
+  int x0 = (W - tw) / 2, y0 = (H - 8 * sz) / 2;
   anim.mask->setCursor(x0, y0);
   anim.mask->print(txt);
-  anim.tx0 = x0 - 2; anim.tx1 = x0 + tw + 1; anim.ty0 = y0 - 2; anim.ty1 = y0 + 24 + 1;
+  anim.tx0 = x0 - 2; anim.tx1 = x0 + tw + 1; anim.ty0 = y0 - 2; anim.ty1 = y0 + 8 * sz + 1;
   anim.t0 = millis(); anim.lastFrame = 0; anim.frames = 0; anim.active = true;
   logAdd(String("Animation ") + txt + " " + ab + " : debut");
 }
@@ -1140,7 +1143,7 @@ static bool animTick(unsigned long now) {
     dirty = true;                               // retour a l'affichage normal (nouveau score compris)
     return false;
   }
-  if (now - anim.lastFrame >= 40) { anim.lastFrame = now; animDrawFrame(el); anim.frames++; }
+  if (now - anim.lastFrame >= 40) { anim.lastFrame = now; animDrawFrame(el); dma->show(); anim.frames++; }
   return true;
 }
 

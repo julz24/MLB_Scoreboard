@@ -59,6 +59,19 @@ select,input[type=text]{width:58%;font-size:15px;border-radius:12px;border:1px s
 .days button.on{background:var(--pri);border-color:var(--pri);color:#003258}
 .chip{border:1px solid #8a9199;border-radius:999px;background:transparent;color:var(--txt);font-size:14px;font-weight:500;padding:6px 16px;cursor:pointer}
 .chip.on{background:var(--tonal);color:var(--pri)}
+.segw button{flex:1;padding:10px 0}
+.pill:disabled{opacity:.4;cursor:default}
+.pinL{font-size:15px;color:var(--txt)}
+.pinH{margin-top:3px}
+select.pin{width:auto;min-width:104px;flex:none}
+.hn{font-size:13px;color:var(--mut);margin-top:2px}
+.hint a{color:var(--pri)}
+.hint.warn{color:var(--err)}
+.bd{display:flex;align-items:center;gap:16px;padding:12px 0;color:var(--txt);text-decoration:none;border-top:1px solid var(--line)}
+.bd:first-child{border-top:none}
+.bd .ic{width:44px;height:44px;border-radius:12px}
+.bd .ic svg{width:26px;height:26px}
+.bdn{font-size:17px;font-weight:500}
 select.tm{width:auto;padding:8px 10px}
 /* Logos des ligues : PNG 2x rendus depuis les SVG officiels, integres (aucun acces Internet requis) */
 .lh{display:flex;align-items:center;gap:14px;margin-bottom:6px}
@@ -120,7 +133,7 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 
 <header>
   <button class="back" id="backBtn" onclick="go('')" aria-label="Retour">&#8249;</button>
-  <h1 id="hdr">Tableau d'affichage Sports</h1>
+  <div><h1 id="hdr">Tableau d'affichage Sports</h1><div class="hn" id="hdrName"></div></div>
 </header>
 
 <!-- ===================== ACCUEIL ===================== -->
@@ -152,6 +165,10 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
     <div><div class="nt" id="t_navParam">Paramètres</div><div class="ns" id="t_navParamSub">Affichage, langue, système</div></div>
     <div class="chev">&#8250;</div>
   </div>
+  <div class="card" id="bdCard" style="display:none;padding:14px 20px">
+    <div class="sec" id="t_boards">Autres tableaux</div>
+    <div id="bdList"></div>
+  </div>
 </div>
 
 <!-- ===================== SPORTS ===================== -->
@@ -172,6 +189,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <div class="row"><label id="t_wideNhl">Chronomètre en direct</label>
     <label class="sw"><input type="checkbox" id="wideNhl" onchange="set('wideNhl',this.checked?1:0)"><span class="sl"></span></label>
+  </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin0" onchange="setPin(0,this.value)"></select>
   </div>
   <div class="row"><label id="t_liveNhl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNhl" onchange="set('liveNhl',this.checked?1:0)"><span class="sl"></span></label>
@@ -196,6 +216,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_wildcard">Classement meilleur 2e</label>
     <label class="sw"><input type="checkbox" id="wildcard" onchange="set('wildcard',this.checked?1:0)"><span class="sl"></span></label>
   </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin1" onchange="setPin(1,this.value)"></select>
+  </div>
   <div class="row"><label id="t_liveMlb">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveMlb" onchange="set('liveMlb',this.checked?1:0)"><span class="sl"></span></label>
   </div>
@@ -211,6 +234,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <div class="row"><label id="t_favNfl">Équipe favorite</label>
     <select id="favNfl" onchange="set('favNfl',this.value)"></select>
+  </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin2" onchange="setPin(2,this.value)"></select>
   </div>
   <div class="row"><label id="t_liveNfl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNfl" onchange="set('liveNfl',this.checked?1:0)"><span class="sl"></span></label>
@@ -232,6 +258,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favNba">Équipe favorite</label>
     <select id="favNba" onchange="set('favNba',this.value)"></select>
   </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin3" onchange="setPin(3,this.value)"></select>
+  </div>
   <div class="row"><label id="t_liveNba">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNba" onchange="set('liveNba',this.checked?1:0)"><span class="sl"></span></label>
   </div>
@@ -244,6 +273,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="lh"><span class="lt lg-ncaa" role="img" aria-label="NCAA"></span><div class="sec" id="t_secNcaa">NCAA Football</div></div>
   <div class="row"><label id="t_spNcaa">NCAA</label>
     <label class="sw"><input type="checkbox" id="spNcaa" onchange="set('spNcaa',this.checked?1:0)"><span class="sl"></span></label>
+  </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin4" onchange="setPin(4,this.value)"></select>
   </div>
   <div class="row"><label id="t_liveNcaa">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNcaa" onchange="set('liveNcaa',this.checked?1:0)"><span class="sl"></span></label>
@@ -301,6 +333,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favPwhl">Équipe favorite</label>
     <select id="favPwhl" onchange="set('favPwhl',this.value)"></select>
   </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin5" onchange="setPin(5,this.value)"></select>
+  </div>
   <div class="row"><label id="t_livePwhl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="livePwhl" onchange="set('livePwhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
@@ -316,6 +351,9 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <div class="row"><label id="t_altLogoCfl">Logo alternatif</label>
     <label class="sw"><input type="checkbox" id="altLogoCfl" onchange="set('altLogoCfl',this.checked?1:0);if(lastState)lastState.altLogoCfl=this.checked;pkSync();gmLoad()"><span class="sl"></span></label>
+  </div>
+  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
+    <select class="pin" id="pin6" onchange="setPin(6,this.value)"></select>
   </div>
   <div class="row"><label id="t_liveCfl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveCfl" onchange="set('liveCfl',this.checked?1:0)"><span class="sl"></span></label>
@@ -372,10 +410,26 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 </div>
 
 <div class="card">
+  <h2 id="t_board">Tableau</h2>
+  <div class="row"><label id="t_bname">Nom du tableau</label>
+    <input type="text" id="bname" maxlength="24" autocapitalize="none" autocomplete="off" spellcheck="false" oninput="nameEdit()" onkeydown="if(event.key==='Enter')setName()"></div>
+  <div class="hint" id="bnameHint"></div>
+  <div class="pills" style="margin-top:14px">
+    <button class="pill p-ton" id="t_nameSave" onclick="setName()" disabled>Sauvegarder</button>
+    <button class="pill p-out" id="t_ident" onclick="identify()">Afficher l'adresse</button>
+  </div>
+  <div class="hint" id="identHint" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:18px"><label id="t_panels">Nombre de panneaux</label></div>
+  <div class="seg segw" id="panSeg"></div>
+  <div class="hint" id="panHint" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
   <h2 id="t_sys">Système</h2>
   <div class="kv">
     <div class="k" id="t_ip">Adresse IP</div><div id="sysIp">-</div>
     <div class="k" id="t_net">Réseau</div><div id="sysNet">-</div>
+    <div class="k" id="t_app">Espace programme</div><div id="sysApp">-</div>
     <div class="k" id="t_fw">Mise à jour</div><div><button class="link" id="sysFw" onclick="fwShowNotes()">-</button></div>
   </div>
   <div class="pills" id="fwPills" style="margin-top:12px">
@@ -510,6 +564,13 @@ const TR={
   t_navParam:["Paramètres","Settings"],
   t_navParamSub:["Affichage, langue, système","Display, language, system"],
   t_sys:["Système","System"],
+  t_board:["Tableau","Board"],
+  t_app:["Espace programme","Program space"],
+  t_bname:["Nom du tableau","Board name"],
+  t_panels:["Nombre de panneaux","Number of panels"],
+  t_boards:["Autres tableaux","Other boards"],
+  t_nameSave:["Sauvegarder","Save"],
+  t_ident:["Afficher l'adresse","Show address"],
   t_ip:["Adresse IP","IP address"],
   t_net:["Réseau","Network"],
   t_fw:["Mise à jour","Update"],
@@ -525,6 +586,21 @@ const TRX={
   logsHide:["Masquer les logs","Hide logs"],
   logsEmpty:["(aucun log pour le moment)","(no logs yet)"],
   rebootQ:["Redémarrer ?","Reboot ?"],
+  addr:["Adresse : ","Address: "],
+  addrNew:["Nouvelle adresse : ","New address: "],
+  addrTaken:["Ce nom est déjà pris sur le réseau. Adresse réelle : ","This name is already taken on the network. Actual address: "],
+  nameRule:["Lettres, chiffres et tirets seulement.","Letters, digits and hyphens only."],
+  panHint:["Panneaux 64 × 32 branchés en une rangée. Changer ce nombre redémarre le tableau.","64 × 32 panels chained in one row. Changing this restarts the board."],
+  panQ:["Passer à %n panneaux ? Le tableau redémarre (quelques secondes).","Switch to %n panels? The board restarts (a few seconds)."],
+  panBoot:["Redémarrage…","Restarting…"],
+  panFail:["%n panneaux n'ont pas pu démarrer (mémoire insuffisante) : le tableau est revenu à %m.","%n panels could not start (not enough memory): the board went back to %m."],
+  bdPanels:["panneaux","panels"],
+  pinL:["Épingler au panneau","Pin to panel"],
+  pinH:["Ce panneau montre toujours ce sport : le match de l'équipe favorite, sinon les matchs du sport. Il ne fait plus partie de la rotation. Panneau 1 = à gauche.","This panel always shows this sport: the favorite team's game, otherwise the sport's games. It leaves the rotation. Panel 1 = leftmost."],
+  pinNo:["Non","No"],
+  pinWx:["météo","weather"],
+  identMsg:["Le tableau affiche son adresse pendant 10 secondes.","The board shows its address for 10 seconds."],
+  nameSaved:["Nom enregistré : le tableau affiche sa nouvelle adresse.","Name saved: the board shows its new address."],
   wifiQ:["Effacer le WiFi enregistré ? L'appareil redémarrera en mode point d'accès.","Erase saved WiFi ? The device will restart in access-point mode."],
   home:["Tableau d'affichage Sports","Sports Scoreboard"],
   sports:["Sports","Sports"],
@@ -553,7 +629,9 @@ const TRX={
     ["téléchargement interrompu","download interrupted"],
     ["fichier corrompu (somme de contrôle)","corrupted file (checksum)"],
     ["firmware refusé","firmware rejected"],
-    ["adresse de téléchargement invalide","invalid download address"]],
+    ["adresse de téléchargement invalide","invalid download address"],
+    ["la version %v doit être installée par USB (une seule fois)","version %v must be installed over USB (one time only)"]],
+  appOf:[" sur "," of "],
   fwInstallQ:["Installer la version %v ? Le tableau redémarre tout seul à la fin (environ 1 minute). Ne pas le débrancher.","Install version %v ? The board restarts by itself when done (about 1 minute). Do not unplug it."]
 };
 let lang=0;   // 0=FR, 1=EN
@@ -582,6 +660,7 @@ function applyLang(){
   hdr.textContent = TRX[curView()||'home'][lang];
   if(lastState) applyDynamic(lastState);   // re-traduit les parties dynamiques
   schShow();
+  if(bdJson) bdRender();
 }
 function setLang(l){ lang=l; applyLang(); set('lang',l); }
 
@@ -712,8 +791,12 @@ function applyDynamic(s){
   if(typeof s.gamesNcaa!=='undefined') document.getElementById('t_spNcaa').textContent = 'NCAA (' + s.gamesNcaa + ' ' + TRX.sched[lang] + ')';
   if(typeof s.gamesPwhl!=='undefined') document.getElementById('t_spPwhl').textContent = TR.t_spPwhl[lang] + ' (' + s.gamesPwhl + ' ' + TRX.sched[lang] + ')';
   if(typeof s.gamesCfl!=='undefined') document.getElementById('t_spCfl').textContent = TR.t_spCfl[lang] + ' (' + s.gamesCfl + ' ' + TRX.sched[lang] + ')';
+  boardApply(s);
+  pinApply(s);
   sysIp.textContent = s.ip;
   sysNet.textContent = sigTxt(s.rssi);
+  if(s.appSlot){ const mo=b=>(b/1048576).toFixed(2).replace('.',lang==0?',':'.')+(lang==0?' Mo':' MB');
+    sysApp.textContent=mo(s.appUsed)+TRX.appOf[lang]+mo(s.appSlot)+' ('+Math.round(s.appUsed*100/s.appSlot)+' %)'; }
   if(typeof s.fw!=='undefined') showFw(s);
 }
 function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
@@ -747,7 +830,7 @@ function showFw(s){
   else if(s.fwStat==2) t+=' · '+TRX.fwUpToDate[lang];
   else if(s.fwStat==3) t+=' · '+TRX.fwAvail[lang]+' v'+s.fwLatest;
   else if(s.fwStat==4) t+=' · '+TRX.fwInstalling[lang]+' '+s.fwProg+' %';
-  if(s.fwErr) t+=' · '+((TRX.fwErrs[s.fwErr]||['?','?'])[lang]);
+  if(s.fwErr) t+=' · '+((TRX.fwErrs[s.fwErr]||['?','?'])[lang]).replace('%v','v'+s.fwLatest);
   sysFw.textContent=t;
   fwInstBtn.style.display = s.fwStat==3 ? 'inline-block' : 'none';
   fwInstBtn.textContent = TRX.fwInstall[lang]+' v'+s.fwLatest;
@@ -771,6 +854,98 @@ function fwInstall(){
   fwDo('install');
   const t=setInterval(()=>load(),2000);       // progression ; le tableau redemarre a la fin
   setTimeout(()=>clearInterval(t),180000);
+}
+// ---- Tableau : nom sur le reseau (http://<nom>.local) et nombre de panneaux ----
+// Meme regle que le firmware (cleanName) : minuscules, chiffres, tirets ; accents retires ; 24 caracteres.
+function cleanName(v){ return v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+  .replace(/[^a-z0-9-]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,24).replace(/-$/,''); }
+let nameMsg=null, nameDirty=false, identT=null;
+function urlLink(h){ const u='http://'+h+'.local'; return '<a href="'+u+'/">'+u+'</a>'; }
+function boardApply(s){
+  if(typeof s.name==='undefined') return;
+  if(!nameDirty&&document.activeElement!==bname) bname.value=s.name;
+  hdrName.textContent=(s.host||s.name)+'.local';
+  if(nameMsg) bnameHint.innerHTML=nameMsg;
+  else if(s.host&&s.host!==s.name) { bnameHint.innerHTML=TRX.addrTaken[lang]+urlLink(s.host); bnameHint.className='hint warn'; }
+  else { bnameHint.innerHTML=TRX.addr[lang]+urlLink(s.name); bnameHint.className='hint'; }
+  if(!panSeg.dataset.b){ panSeg.dataset.b=1; panSeg.innerHTML=[2,3,4,5,6].map(n=>'<button id="pan'+n+'" onclick="setPanels('+n+')">'+n+'</button>').join(''); }
+  for(let n=2;n<=6;n++) document.getElementById('pan'+n).classList.toggle('on', n==s.panels);
+  if(s.panWant&&s.panWant!=s.panels){ panHint.textContent=TRX.panFail[lang].replace('%n',s.panWant).replace('%m',s.panels); panHint.className='hint warn'; }
+  else if(!panHint.dataset.boot){ panHint.textContent=TRX.panHint[lang]; panHint.className='hint'; }
+}
+// Le bouton Sauvegarder s'active seulement quand le nom (nettoye) differe du nom actuel.
+function nameEdit(){
+  const v=cleanName(bname.value);
+  nameDirty=true;
+  t_nameSave.disabled = !v || (lastState&&v===lastState.name);
+  if(bname.value&&!v){ bnameHint.textContent=TRX.nameRule[lang]; bnameHint.className='hint warn'; }
+  else if(v){ bnameHint.innerHTML=TRX.addr[lang]+urlLink(v); bnameHint.className='hint'; }
+}
+function setName(){
+  const v=cleanName(bname.value);
+  if(!v){ bnameHint.textContent=TRX.nameRule[lang]; bnameHint.className='hint warn'; return; }
+  bname.value=v;
+  nameDirty=false; t_nameSave.disabled=true;
+  if(lastState&&v===lastState.name) return;
+  set('name',v);
+  nameMsg=TRX.addrNew[lang]+urlLink(v);
+  bnameHint.innerHTML=nameMsg; bnameHint.className='hint';
+  identMsgShow(TRX.nameSaved[lang], 8000);
+  if(lastState){ lastState.name=v; lastState.host=v; }
+  setTimeout(()=>{ nameMsg=null; },15000);
+}
+function identMsgShow(t,ms){ identHint.textContent=t; clearTimeout(identT); identT=setTimeout(()=>{ identHint.textContent=''; },ms); }
+function identify(){ set('ident',1); identMsgShow(TRX.identMsg[lang],10000); }
+function setPanels(n){
+  if(!lastState||n==lastState.panels) return;
+  if(!confirm(TRX.panQ[lang].replace('%n',n))) return;
+  set('panels',n);
+  panHint.dataset.boot=1; panHint.textContent=TRX.panBoot[lang]; panHint.className='hint';
+  setTimeout(()=>location.reload(),12000);
+}
+// ---- Epingler un sport a un panneau (pin0..pin6, ordre du firmware : LNH MLB NFL NBA NCAA LPHF LCF) ----
+// Le menu n'offre que les panneaux du tableau (Parametres > Nombre de panneaux) ; celui de la meteo
+// est grise. Un panneau deja pris par un autre sport porte son nom : le choisir y deplace ce sport.
+const PIN_SP=[['LNH','NHL'],['MLB','MLB'],['NFL','NFL'],['NBA','NBA'],['NCAA','NCAA'],['LPHF','PWHL'],['LCF','CFL']];
+function pinApply(s){
+  if(!s.pins) return;
+  const n=s.panels||4;
+  document.querySelectorAll('.pinL').forEach(e=>e.textContent=TRX.pinL[lang]);
+  document.querySelectorAll('.pinH').forEach(e=>e.textContent=TRX.pinH[lang]);
+  for(let k=0;k<7;k++){
+    const sel=document.getElementById('pin'+k); if(!sel) continue;
+    let o='<option value="0">'+TRX.pinNo[lang]+'</option>';
+    for(let p=1;p<=n;p++){
+      const wx=s.wxforce&&p==n, who=s.pins.findIndex((v,j)=>j!=k&&v==p);
+      o+='<option value="'+p+'"'+(wx?' disabled':'')+'>'+p+(wx?' · '+TRX.pinWx[lang]:who>=0?' · '+PIN_SP[who][lang]:'')+'</option>';
+    }
+    fillSel(sel,o);
+    if(document.activeElement!==sel) sel.value=String(s.pins[k]||0);
+  }
+}
+function setPin(k,v){
+  set('pin'+k,v);
+  if(!lastState||!lastState.pins) return;
+  v=+v;
+  if(v) lastState.pins=lastState.pins.map((x,j)=>j!=k&&x==v?0:x);   // l'autre sport retourne dans la rotation
+  lastState.pins[k]=v;
+  pinApply(lastState);
+}
+// ---- Autres tableaux du reseau (decouverte mDNS par le tableau : /api/boards) ----
+let bdJson='';
+const BD_IC='<svg viewBox="0 0 24 24" fill="none" stroke="#d4e8ff" stroke-width="1.8"><rect x="2" y="7" width="20" height="10" rx="1.5"/><path d="M7.5 7v10M12 7v10M16.5 7v10"/></svg>';
+function bdLoad(){
+  if(curView()!=='') return;
+  fetch('/api/boards',{cache:'no-store'}).then(r=>r.ok?r.text():null).then(t=>{
+    if(!t||t===bdJson) return;
+    bdJson=t; bdRender();
+  }).catch(()=>{});
+}
+function bdRender(){
+  let L=[]; try{ L=JSON.parse(bdJson).b||[]; }catch(e){}
+  bdCard.style.display=L.length?'block':'none';
+  bdList.innerHTML=L.map(b=>'<a class="bd" href="http://'+esc(b.ip)+'/"><div class="ic">'+BD_IC+'</div><div><div class="bdn">'+esc(b.n)+'</div>'+
+    '<div class="ns">'+esc(b.ip)+(b.p?' · '+b.p+' '+TRX.bdPanels[lang]:'')+'</div></div><div class="chev">&#8250;</div></a>').join('');
 }
 function rebootConfirm(){ if(confirm(TRX.rebootQ[lang])) fetch('/api/reboot'); }
 function wifiConfirm(){ if(confirm(TRX.wifiQ[lang])) fetch('/api/wifi_reset'); }
@@ -942,11 +1117,12 @@ function pkOpen(id){
 }
 showView();
 pkInit();
-schBuild();load();gmLoad();
-setInterval(()=>{ load(); gmLoad(); },5000);
+schBuild();load();gmLoad();bdLoad();
+setInterval(()=>{ load(); gmLoad(); bdLoad(); },5000);
 gmStrip.addEventListener('scroll',gmArrows,{passive:true});
 window.addEventListener('resize',gmArrows);
 window.addEventListener('hashchange',gmLoad);
+window.addEventListener('hashchange',bdLoad);
 </script></body></html>
 )HTML";
 

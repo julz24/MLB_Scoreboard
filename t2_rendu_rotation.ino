@@ -8,6 +8,7 @@
 // Ordre fixe des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL.
 //  - Chaque sport actif a SON panneau : match du favori epingle, sinon le match
 //    courant de sa rotation, sinon son classement, sinon "AUCUN MATCH".
+//  - Un sport EPINGLE (page Sports) garde son panneau et sort de la rotation.
 //  - Le favori NHL EN DIRECT prend 2 panneaux et reste toujours a l'ecran.
 //  - S'il y a plus de sports actifs que de panneaux (4, ou 3 avec la meteo),
 //    une fenetre de sports glisse d'un cran a chaque rotation (sportWinRot).
@@ -249,28 +250,71 @@ static int drawForced(int px, int room) {
   return 0;
 }
 
-void renderUnified() {
-  const int PX[4] = {0, 64, 128, 192};
-  standShownN = 0;                // aucune division de classement affichee pour l'instant
-  int s = 0;                      // prochain panneau libre
-  int limit = cfgForceWeather ? 3 : 4;   // la meteo reserve le dernier panneau
+// Nombre de panneaux LIBRES consecutifs a partir de fs[s] (fs = panneaux libres, en ordre) :
+// un match NHL sur 2 panneaux ne peut pas enjamber un panneau epingle.
+static int slotRoom(const int* fs, int nf, int s) {
+  int r = 0;
+  while (s + r < nf && fs[s + r] == fs[s] + r) r++;
+  return r;
+}
+// Panneau (0 = gauche) ou le sport k est epingle, -1 s'il est dans la rotation (ou si
+// l'epingle ne vaut plus : sport desactive, panneau inexistant ou reserve a la meteo).
+static int pinIdx(int k, int limit) {
+  int p = cfgPin[k];
+  return (p >= 1 && p <= limit && sportOn(k)) ? p - 1 : -1;
+}
 
-  // --- 0) Match choisi dans la page web : panneau 1, pour une etape. Il remplace le panneau
-  //        de son sport (pas de doublon) ; les autres sports suivent normalement. ---
-  int fSp = -1;
-  if (forceOn) {
-    int u = drawForced(PX[0], limit);
-    if (u > 0) { s = u; fSp = forceSp; }
+void renderUnified() {
+  int PX[PANELS_MAX];
+  for (int i = 0; i < cfgPanels; i++) PX[i] = i * PANEL_RES_X;
+  standShownN = 0;                // aucune division de classement affichee pour l'instant
+  int limit = cfgForceWeather ? cfgPanels - 1 : cfgPanels;   // la meteo reserve le dernier panneau
+
+  // Match choisi dans la page web : il remplace le panneau de son sport pour une etape.
+  int fSp = (forceOn && forcedIdx() >= 0) ? forceSp : -1;
+
+  // --- 0) Sports epingles : chacun sur SON panneau, hors de la rotation ---
+  bool busy[PANELS_MAX] = {false};
+  int pinAt[NSPORT];
+  for (int k = 0; k < NSPORT; k++) {
+    int p = pinIdx(k, limit);
+    if (p >= 0 && busy[p]) p = -1;                            // 2 sports sur le meme panneau (ne devrait pas arriver) : le 1er gagne
+    pinAt[k] = p;
+    if (p >= 0) busy[p] = true;
+  }
+  // NHL epingle en direct : 2 panneaux si celui de droite est libre (sinon format compact).
+  bool nhlWide = false;
+  if (pinAt[0] >= 0) {
+    int p = pinAt[0];
+    int gi = (fSp == 0) ? forcedIdx() : (favIdxNHL >= 0 ? favIdxNHL : (rotCountNHL > 0 ? rotListNHL[rotBaseNHL % rotCountNHL] : -1));
+    bool live = gi >= 0 && gi < gameCountNHL && gamesNHL[gi].state == 1;
+    bool want = live && (cfgWideNHL || (fSp != 0 && gi == favIdxNHL));
+    if (want && p + 1 < limit && !busy[p + 1]) { busy[p + 1] = true; nhlWide = true; }
+  }
+  for (int k = 0; k < NSPORT; k++) {
+    if (pinAt[k] < 0) continue;
+    int w = (k == 0 && nhlWide) ? 2 : 1;
+    if (k == fSp) drawForced(PX[pinAt[k]], w);              // le match choisi s'affiche sur le panneau epingle de son sport
+    else          drawSportPrimary(k, PX[pinAt[k]], w == 2);
   }
 
-  // --- 1) Favori NHL en direct : 2 panneaux, toujours a l'ecran ---
-  bool pinNhl = nhlFavLive() && limit - s >= 2 && !(fSp == 0 && forcedIdx() == favIdxNHL);
-  if (pinNhl) { drawSportPrimary(0, PX[s], true); s += 2; }
+  // Panneaux libres pour la rotation, de gauche a droite.
+  int fs[PANELS_MAX], nf = 0;
+  for (int i = 0; i < limit; i++) if (!busy[i]) fs[nf++] = i;
+  int s = 0;                      // prochain panneau libre (index dans fs)
 
-  // --- 2) Un panneau par sport actif (fenetre glissante s'il y en a trop) ---
+  // --- 1) Match choisi dans la page web (sport non epingle) : 1er panneau libre ---
+  //     (sport epingle : deja dessine sur son panneau a l'etape 0)
+  if (fSp >= 0 && pinAt[fSp] < 0 && nf > 0) s = drawForced(PX[fs[0]], slotRoom(fs, nf, 0));
+
+  // --- 2) Favori NHL en direct (non epingle) : 2 panneaux, toujours a l'ecran ---
+  bool pinNhl = pinAt[0] < 0 && nhlFavLive() && s < nf && slotRoom(fs, nf, s) >= 2 && !(fSp == 0 && forcedIdx() == favIdxNHL);
+  if (pinNhl) { drawSportPrimary(0, PX[fs[s]], true); s += 2; }
+
+  // --- 3) Un panneau par sport actif non epingle (fenetre glissante s'il y en a trop) ---
   int rest[NSPORT], nr = 0;
-  for (int k = 0; k < NSPORT; k++) if (sportOn(k) && !(k == 0 && pinNhl) && k != fSp) rest[nr++] = k;
-  if (nr > limit - s) {
+  for (int k = 0; k < NSPORT; k++) if (sportOn(k) && pinAt[k] < 0 && !(k == 0 && pinNhl) && k != fSp) rest[nr++] = k;
+  if (nr > nf - s) {
     // Plus de sports que de panneaux : on ne fait pas tourner les sports qui n'ont
     // rien a montrer (ni match, ni classement) - leur "AUCUN MATCH" volerait la
     // place d'un sport qui a du contenu. Si aucun n'en a, on garde tout.
@@ -278,44 +322,45 @@ void renderUnified() {
     for (int i = 0; i < nr; i++) if (sportHasContent(rest[i])) keep[nk++] = rest[i];
     if (nk > 0) { for (int i = 0; i < nk; i++) rest[i] = keep[i]; nr = nk; }
   }
-  int startK = (nr > limit - s) ? (sportWinRot % nr) : 0;
-  for (int i = 0; i < nr && s < limit; i++) {
+  int startK = (nr > nf - s) ? (sportWinRot % nr) : 0;
+  for (int i = 0; i < nr && s < nf; i++) {
     int k = rest[(startK + i) % nr];
     bool w = false;                                           // "Affichage avec chronometre" : NHL en direct sur 2 panneaux
-    if (k == 0 && cfgWideNHL && s + 2 <= limit) {
+    if (k == 0 && cfgWideNHL && slotRoom(fs, nf, s) >= 2) {
       int gi = favIdxNHL >= 0 ? favIdxNHL : (rotCountNHL > 0 ? rotListNHL[rotBaseNHL % rotCountNHL] : -1);
       w = gi >= 0 && gi < gameCountNHL && gamesNHL[gi].state == 1;
     }
-    drawSportPrimary(k, PX[s], w);
+    drawSportPrimary(k, PX[fs[s]], w);
     s += w ? 2 : 1;
   }
 
-  // --- 3) Panneaux libres : matchs supplementaires puis classement ---
+  // --- 4) Panneaux libres : matchs supplementaires puis classement ---
   // Montre un 2e (3e...) match d'un sport MEME s'il a un favori epingle sur
   // son propre panneau (rotList l'exclut deja, donc pas de doublon possible) -
   // permet de suivre le score du favori ET les autres matchs en rotation.
   // L'ORDRE de priorite entre sports tourne (freeSportRot) plutot que d'etre
   // fixe, pour une rotation equitable quand plusieurs sports ont des matchs
-  // supplementaires disponibles en meme temps.
+  // supplementaires disponibles en meme temps. Un sport epingle a un panneau
+  // n'en fait plus partie : ses matchs restent sur son panneau.
   int extra[NSPORT] = {0};
   int standIdx = 0;
   int panelsFilled = 0;
-  while (s < limit) {
+  while (s < nf) {
     bool filled = false;
     for (int attempt = 0; attempt < NSPORT && !filled; attempt++) {
       int k = (freeSportRot + panelsFilled + attempt) % NSPORT;
       int used = 1;
-      if (sportOn(k) && drawSportExtra(k, PX[s], extra, limit - s, &used)) { filled = true; s += used - 1; panelsFilled += used - 1; }
+      if (sportOn(k) && pinAt[k] < 0 && drawSportExtra(k, PX[fs[s]], extra, slotRoom(fs, nf, s), &used)) { filled = true; s += used - 1; panelsFilled += used - 1; }
     }
     if (!filled) {
-      standIdx += 1 + drawStandingsCombined(PX[s], standIdx);   // honore les toggles wild card ; saute les divisions deja affichees
+      standIdx += 1 + drawStandingsCombined(PX[fs[s]], standIdx);   // honore les toggles wild card ; saute les divisions deja affichees
     }
     panelsFilled++;
     s++;
   }
 
-  // --- 4) Meteo sur le dernier panneau ---
-  if (cfgForceWeather) { drawWeatherClock(192); wxPanels[wxPanelCount++] = 192; }
+  // --- 5) Meteo sur le dernier panneau ---
+  if (cfgForceWeather) { drawWeatherClock(W - PANEL_RES_X); wxPanels[wxPanelCount++] = W - PANEL_RES_X; }
 }
 
 // ====================== RENDU GLOBAL (dispatch multi-sport) ======================
@@ -341,8 +386,8 @@ bool render() {
     renderUnified();
   } else {
     // Aucun sport actif : ecran vide sauf la meteo (evite un panneau mort).
-    drawWeatherClock(192);
-    wxPanels[wxPanelCount++] = 192;
+    drawWeatherClock(W - PANEL_RES_X);
+    wxPanels[wxPanelCount++] = W - PANEL_RES_X;
   }
 
   xSemaphoreGive(dataMutex);

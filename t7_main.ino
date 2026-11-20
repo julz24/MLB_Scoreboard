@@ -5,22 +5,47 @@
 // ============================================================
 
 // ====================== SETUP ======================
+// 5-6 panneaux impossibles a demarrer (memoire) : retour a 4, memorise. restart = l'allocation a deja
+// echoue (memoire partiellement prise) -> on redemarre proprement a 4 panneaux.
+void panelsFallback(bool restart) {
+  logAdd("Panneaux: " + String(cfgPanels) + " impossibles (memoire) -> retour a 4");
+  panFailWant = cfgPanels;
+  cfgPanels = 4;
+  prefs.begin("scoreboard", false);
+  prefs.putUChar("panels", cfgPanels);
+  prefs.putUChar("panFail", panFailWant);
+  prefs.end();
+  if (restart) { delay(200); ESP.restart(); }
+}
+
 void initPanel() {
   HUB75_I2S_CFG::i2s_pins _pins = {
     R1_PIN, G1_PIN, B1_PIN, R2_PIN, G2_PIN, B2_PIN,
     A_PIN, B_PIN, C_PIN, D_PIN, E_PIN, LAT_PIN, OE_PIN, CLK_PIN
   };
-  HUB75_I2S_CFG mxconfig(PANEL_RES_X, PANEL_RES_Y, PANEL_CHAIN, _pins);
+  // Image en RAM interne (DMA) : 64 px x panneaux x 8 bits de couleur x 2 octets x 16 paires de lignes,
+  // soit 64 Ko pour 4 panneaux et 96 Ko pour 6. On garde PANEL_RAM_RESERVE libres pour le WiFi, le TLS
+  // et le serveur web ; sinon (5-6 panneaux seulement) retour a 4.
+  const size_t PANEL_RAM_RESERVE = 100 * 1024;
+  size_t freeDma = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+  size_t need = (size_t)PANEL_RES_X * cfgPanels * 8 * 2 * (PANEL_RES_Y / 2);
+  logAdd("Panneaux: " + String(cfgPanels) + " demandes, image " + String(need / 1024) + " Ko, RAM DMA libre " + String(freeDma / 1024) + " Ko");
+  if (cfgPanels > 4 && freeDma < need + PANEL_RAM_RESERVE) panelsFallback(false);
+  W = PANEL_RES_X * cfgPanels;
+  HUB75_I2S_CFG mxconfig(PANEL_RES_X, PANEL_RES_Y, cfgPanels, _pins);
   mxconfig.clkphase = false;
   mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_10M;   // 10MHz (etait 8M) : plus de bande passante pour 4 panneaux
   mxconfig.min_refresh_rate = 100;             // force >=100Hz -> supprime le scintillement permanent sur chaine longue
   mxconfig.latch_blanking = 2;                 // marge anti-ghosting a vitesse plus elevee
   mxconfig.double_buff = false;  // 4 panneaux : le double buffer mangeait trop de RAM interne (web UI lente, OTA impossible). Desactive.
   // mxconfig.driver = HUB75_I2S_CFG::FM6126A;  // si ecran noir
-  dma = new MatrixPanel_I2S_DMA(mxconfig);
-  bool panelOk = dma->begin();
-  dma->setBrightness8(cfgBright);
-  dma->clearScreen();
+  hw = new MatrixPanel_I2S_DMA(mxconfig);
+  bool panelOk = hw->begin();
+  if (!panelOk && cfgPanels > 4) panelsFallback(true);   // redemarre a 4 panneaux
+  hw->setBrightness8(cfgBright);
+  hw->clearScreen();
+  dma = new FrameCanvas(W, H);                 // ecran virtuel en PSRAM (anti-scintillement)
+  logAdd(String("Ecran virtuel: ") + (dma->buffered() ? "PSRAM" : "indisponible, dessin direct"));
   Serial.println("\n========================================");
   Serial.printf("  Panneau begin(): %s\n", panelOk ? "OK" : "ECHEC");
   Serial.printf("  RAM interne libre: %d octets\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
@@ -38,7 +63,7 @@ void initPanel() {
 // === BOOT_ANIM_BEGIN ===
 inline void bootPx(int x, int y, uint16_t c) {
   if (x < 0 || x >= W || y < 0 || y >= PANEL_RES_Y) return;
-  dma->drawPixel(x, y, c);
+  hw->drawPixel(x, y, c);                           // direct sur les panneaux (tache de chargement, autre coeur)
 }
 
 // Logo WiFi (point + 3 arcs de 90 degres), centre sur les 256 px.
@@ -119,6 +144,7 @@ void bootAnimTask(void*) {
 // avant que setup() dessine le premier ecran.
 void bootAnimStart() {
   dma->fillScreen(0);
+  dma->show(true);
   bootAnimRun = true; bootAnimDone = false;
   xTaskCreatePinnedToCore(bootAnimTask, "bootAnim", 4096, NULL, 1, NULL, 0);
 }
@@ -127,6 +153,7 @@ void bootAnimStop() {
   unsigned long t0 = millis();
   while (!bootAnimDone && millis() - t0 < 500) delay(5);
   dma->fillScreen(0);
+  dma->show(true);                                  // efface ce que la tache a dessine directement
 }
 
 void setup() {
@@ -137,6 +164,7 @@ void setup() {
   loadCfg();
   initPanel();
   dma->fillScreen(0);
+  dma->show(true);
   drawWifiIcon(C(255, 255, 255), 0);   // logo WiFi blanc : pas encore connecte
   unsigned long tBoot = millis();
 
@@ -152,7 +180,7 @@ void setup() {
   delay(700);
   logAdd("[t+" + String(millis() - tBoot) + "ms] WiFi connecte, IP " + WiFi.localIP().toString());
 
-  if (MDNS.begin(HOSTNAME)) logAdd("mDNS: http://" + String(HOSTNAME) + ".local");
+  mdnsStart();   // http://<nom>.local + annonce du tableau aux autres tableaux du reseau
   configTzTime("EST5EDT,M3.2.0,M11.1.0", "pool.ntp.org", "time.nist.gov");
 
   server.on("/", []() { server.send_P(200, "text/html", PAGE_HTML); });
@@ -162,6 +190,7 @@ void setup() {
   server.on("/api/games", handleGames);   // tuiles de matchs de la page d'accueil
   server.on("/api/logo", handleLogo);     // logo d'une equipe (pixels du panneau) pour les tuiles
   server.on("/api/show", handleShow);     // clic sur une tuile : ce match au panneau 1 pour une etape
+  server.on("/api/boards", handleBoards); // autres tableaux du reseau (decouverte mDNS)
   server.on("/api/logs", []() {
     // Copie sous mutex puis envoi hors mutex : netTask peut decaler logBuf a tout moment.
     static char logCopy[LOG_MAX + 1];
@@ -442,7 +471,9 @@ void loop() {
 
   unsigned long now = millis();
   scheduleTick(now);
+  boardScanStep();             // reponses de la recherche des autres tableaux (non bloquant)
   if (animTick(now)) return;   // animation de but/touche en cours : elle a l'ecran pour elle seule (serveur web deja servi plus haut)
+  if (identTick(now)) return;  // "Afficher l'adresse" : nom et IP plein ecran quelques secondes
   if (now - lastRotate >= (unsigned long)cfgRotationSec * 1000) {
     lastRotate = now;
     xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -502,4 +533,5 @@ void loop() {
       logAdd("render() lent: " + String(dR) + "ms");
     }
   }
+  dma->show();   // copie vers les panneaux les pixels changes (render, meteo animee, chrono LNH)
 }
