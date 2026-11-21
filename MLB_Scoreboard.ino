@@ -26,9 +26,9 @@
      version.h, sport_util.h, web_ui.h, logos_*.h
    L'IDE Arduino colle les onglets t1..t7 a la suite de ce fichier (ordre
    alphabetique) : l'ordre des declarations est donc celui des numeros.
-   Partition : "Minimal SPIFFS (1.9MB APP with OTA)" (Outils > Partition Scheme).
-   Quand le firmware ne tiendra plus : "16M Flash (3MB APP/9.9MB FATFS)" (2 x 3 Mo),
-   a installer une seule fois par USB sur chaque tableau.
+   Partition : "16M Flash (3MB APP/9.9MB FATFS)" (Outils > Partition Scheme) : 2 x 3 Mo
+   pour le firmware avec mise a jour OTA. Les anciens tableaux en "Minimal SPIFFS"
+   (2 x 1,9 Mo) changent de disposition une seule fois, par USB.
    ============================================================ */
 
 #include <WiFi.h>

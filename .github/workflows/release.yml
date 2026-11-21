@@ -19,9 +19,10 @@ permissions:
 
 env:
   # Memes reglages de carte que dans l'IDE Arduino (ESP32S3 Dev Module).
-  # Partition "Minimal SPIFFS" (2 x 1,9 Mo). Plus tard : "app3M_fat9M_16MB" (2 x 3 Mo), qui demande
-  # une installation USB par tableau ; la web UI previent si un firmware ne tient plus.
-  FQBN: esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=min_spiffs,CDCOnBoot=cdc
+  # Partition "16M Flash (3MB APP/9.9MB FATFS)" : 2 x 3 Mo pour le firmware (mise a jour OTA).
+  # Un tableau encore en "Minimal SPIFFS" (2 x 1,9 Mo) passe a cette disposition une seule fois
+  # par USB (scoreboard-usb-complet.bin) ; la web UI le lui signale si un firmware ne tient plus.
+  FQBN: esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,CDCOnBoot=cdc
   ESP32_CORE: "3.3.4"
 
 jobs:
