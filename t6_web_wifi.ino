@@ -177,6 +177,9 @@ void handleState() {
   j += ",\"pins\":[";
   for (int k = 0; k < 7; k++) j += (k ? "," : "") + String(cfgPin[k]);
   j += "]";
+  j += ",\"tord\":[";
+  for (int k = 0; k < 7; k++) j += (k ? "," : "") + String(cfgTileOrd[k]);
+  j += "]";
   j += ",\"rssi\":" + String(WiFi.RSSI());
   j += ",\"games\":" + String(gameCount);
   j += ",\"favidx\":" + String(favIdx);
@@ -216,6 +219,18 @@ void handleState() {
   j += ",\"cfP12\":" + String(cfgNcaaConf[4] ? "true" : "false");
   j += ",\"cfHors\":" + String(cfgNcaaHors ? "true" : "false");
   j += ",\"gamesNcaa\":" + String(gameCountNCAA);
+  { // matchs EN DIRECT par sport (tuiles de la page Sports), ordre 0 NHL 1 MLB 2 NFL 3 NBA 4 NCAA 5 PWHL 6 CFL
+    int lv[7] = {0, 0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < gameCountNHL; i++)  if (gamesNHL[i].state == 1)  lv[0]++;
+    for (int i = 0; i < gameCount; i++)     if (games[i].state == 1)     lv[1]++;
+    for (int i = 0; i < gameCountNFL; i++)  if (gamesNFL[i].state == 1)  lv[2]++;
+    for (int i = 0; i < gameCountNBA; i++)  if (gamesNBA[i].state == 1)  lv[3]++;
+    for (int i = 0; i < gameCountNCAA; i++) if (gamesNCAA[i].state == 1) lv[4]++;
+    for (int i = 0; i < gameCountPWHL; i++) if (gamesPWHL[i].state == 1) lv[5]++;
+    for (int i = 0; i < gameCountCFL; i++)  if (gamesCFL[i].state == 1)  lv[6]++;
+    j += ",\"liveN\":[";
+    for (int k = 0; k < 7; k++) j += (k ? "," : "") + String(lv[k]);
+    j += "]"; }
   {
     char pl[64] = "", cy[40] = ""; bool au = true; int st = 0;
     if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -444,6 +459,12 @@ void handleSet() {
     if (p < 0 || p > cfgPanels || (cfgForceWeather && p == cfgPanels)) p = 0;   // pas de panneau inexistant ni celui de la meteo
     if (p) for (int o = 0; o < 7; o++) if (o != k && cfgPin[o] == p) cfgPin[o] = 0;   // un seul sport par panneau : l'autre retourne dans la rotation
     cfgPin[k] = p;
+  }
+  if (server.hasArg("tord")) {   // ordre des tuiles de la page Sports : 7 chiffres, chaque sport une fois (ex. 1023456)
+    String t = server.arg("tord");
+    uint8_t o[7]; int seen = 0;
+    if (t.length() == 7) for (int k = 0; k < 7; k++) { o[k] = t[k] - '0'; if (o[k] < 7) seen |= 1 << o[k]; }
+    if (seen == 0x7F) memcpy(cfgTileOrd, o, sizeof(o));
   }
   // Meteo activee ou moins de panneaux : un sport epingle sur un panneau devenu indisponible retourne dans la rotation.
   for (int k = 0; k < 7; k++) if (cfgPin[k] > cfgPanels || (cfgForceWeather && cfgPin[k] == cfgPanels)) cfgPin[k] = 0;

@@ -73,6 +73,23 @@ select.pin{width:auto;min-width:104px;flex:none}
 .bd .ic svg{width:26px;height:26px}
 .bdn{font-size:17px;font-weight:500}
 select.tm{width:auto;padding:8px 10px}
+/* Page Sports : une tuile par ligue (logo cadre, matchs du jour, en direct) -> sous-page du sport */
+.lgG{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.lgT{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:10px;cursor:pointer;color:var(--txt);text-align:left;font:inherit}
+.lgT:active{background:#22262b}
+.lgI{display:block;width:100%;aspect-ratio:4/3;border-radius:14px;background:#fff no-repeat center;
+  background-size:contain;background-origin:content-box;padding:14% 18%}
+.lgT.off .lgI{opacity:.45}
+.lgN{font-size:14px;margin:10px 4px 0;min-height:18px}
+.lgL{font-size:13px;margin:3px 4px 2px;min-height:17px;color:#ff8a80;font-weight:500}
+.lgT.off .lgN{color:var(--mut)}
+.lgB{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin:-6px 2px 12px}
+.lgB .hint{flex:1}
+.lgM{display:none;justify-content:space-between;margin-top:8px}
+.lgG.edit .lgM{display:flex}
+.lgG.edit .lgT{cursor:default;border-color:#8a9199}
+.lgG.edit .lgT:active{background:var(--card)}
 /* Logos des ligues : PNG 2x rendus depuis les SVG officiels, integres (aucun acces Internet requis) */
 .lh{display:flex;align-items:center;gap:14px;margin-bottom:6px}
 .lt{width:44px;height:44px;border-radius:12px;flex:none;background:#eef1f5 no-repeat center;background-size:contain;background-origin:content-box;padding:6px}
@@ -132,7 +149,7 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 </style></head><body>
 
 <header>
-  <button class="back" id="backBtn" onclick="go('')" aria-label="Retour">&#8249;</button>
+  <button class="back" id="backBtn" onclick="goBack()" aria-label="Retour">&#8249;</button>
   <div><h1 id="hdr">Tableau d'affichage Sports</h1><div class="hn" id="hdrName"></div></div>
 </header>
 
@@ -173,6 +190,18 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 
 <!-- ===================== SPORTS ===================== -->
 <div class="view" id="v_sports">
+  <div class="lgB"><span class="hint" id="lgHint"></span><button class="chip" id="lgEd" onclick="lgEditToggle()">Réorganiser</button></div>
+  <div class="lgG" id="lgGrid">
+    <div class="lgT" data-k="0" role="button" tabindex="0" onclick="lgOpen(0)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(0)}"><span class="lgI lg-nhl" role="img" aria-label="NHL"></span><span class="lgN" id="lgN0"></span><span class="lgL" id="lgL0"></span><span class="lgM"><button class="arr" onclick="lgMove(event,0,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,0,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="1" role="button" tabindex="0" onclick="lgOpen(1)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(1)}"><span class="lgI lg-mlb" role="img" aria-label="MLB"></span><span class="lgN" id="lgN1"></span><span class="lgL" id="lgL1"></span><span class="lgM"><button class="arr" onclick="lgMove(event,1,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,1,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="2" role="button" tabindex="0" onclick="lgOpen(2)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(2)}"><span class="lgI lg-nfl" role="img" aria-label="NFL"></span><span class="lgN" id="lgN2"></span><span class="lgL" id="lgL2"></span><span class="lgM"><button class="arr" onclick="lgMove(event,2,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,2,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="3" role="button" tabindex="0" onclick="lgOpen(3)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(3)}"><span class="lgI lg-nba" role="img" aria-label="NBA"></span><span class="lgN" id="lgN3"></span><span class="lgL" id="lgL3"></span><span class="lgM"><button class="arr" onclick="lgMove(event,3,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,3,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="4" role="button" tabindex="0" onclick="lgOpen(4)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(4)}"><span class="lgI lg-ncaa" role="img" aria-label="NCAA"></span><span class="lgN" id="lgN4"></span><span class="lgL" id="lgL4"></span><span class="lgM"><button class="arr" onclick="lgMove(event,4,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,4,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="5" role="button" tabindex="0" onclick="lgOpen(5)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(5)}"><span class="lgI lg-pwhl" role="img" aria-label="PWHL"></span><span class="lgN" id="lgN5"></span><span class="lgL" id="lgL5"></span><span class="lgM"><button class="arr" onclick="lgMove(event,5,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,5,1)" aria-label="&#8594;">&#8250;</button></span></div>
+    <div class="lgT" data-k="6" role="button" tabindex="0" onclick="lgOpen(6)" onkeydown="if(event.key=='Enter'||event.key==' '){event.preventDefault();lgOpen(6)}"><span class="lgI lg-cfl" role="img" aria-label="CFL"></span><span class="lgN" id="lgN6"></span><span class="lgL" id="lgL6"></span><span class="lgM"><button class="arr" onclick="lgMove(event,6,-1)" aria-label="&#8592;">&#8249;</button><button class="arr" onclick="lgMove(event,6,1)" aria-label="&#8594;">&#8250;</button></span></div>
+  </div>
+</div>
+<div class="view" id="v_nhl">
 <div class="card">
   <div class="lh"><span class="lt lg-nhl" role="img" aria-label="NHL"></span><div class="sec" id="t_secNhl">NHL</div></div>
   <div class="row"><label id="t_spNhl">NHL</label>
@@ -205,6 +234,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_mlb">
 <div class="card">
   <div class="lh"><span class="lt lg-mlb" role="img" aria-label="MLB"></span><div class="sec" id="t_secMlb">MLB</div></div>
   <div class="row"><label id="t_spMlb">MLB</label>
@@ -227,6 +258,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_nfl">
 <div class="card">
   <div class="lh"><span class="lt lg-nfl" role="img" aria-label="NFL"></span><div class="sec" id="t_secNfl">NFL</div></div>
   <div class="row"><label id="t_spNfl">NFL</label>
@@ -250,6 +283,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_nba">
 <div class="card">
   <div class="lh"><span class="lt lg-nba" role="img" aria-label="NBA"></span><div class="sec" id="t_secNba">NBA</div></div>
   <div class="row"><label id="t_spNba">NBA</label>
@@ -269,6 +304,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_ncaa">
 <div class="card">
   <div class="lh"><span class="lt lg-ncaa" role="img" aria-label="NCAA"></span><div class="sec" id="t_secNcaa">NCAA Football</div></div>
   <div class="row"><label id="t_spNcaa">NCAA</label>
@@ -325,6 +362,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_pwhl">
 <div class="card">
   <div class="lh"><span class="lt lg-pwhl" role="img" aria-label="PWHL"></span><div class="sec" id="t_secPwhl">PWHL</div></div>
   <div class="row"><label id="t_spPwhl">PWHL</label>
@@ -341,6 +380,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   </div>
 </div>
 
+</div>
+<div class="view" id="v_cfl">
 <div class="card">
   <div class="lh"><span class="lt lg-cfl" role="img" aria-label="CFL"></span><div class="sec" id="t_secCfl">CFL</div></div>
   <div class="row"><label id="t_spCfl">CFL</label>
@@ -380,12 +421,12 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 <!-- ===================== PARAMETRES ===================== -->
 <div class="view" id="v_param">
 <div class="card">
-  <div class="row"><label id="t_bright">Luminosité</label><span class="val" id="bv">-</span></div>
-  <input type="range" id="bright" min="0" max="100" oninput="bv.textContent=this.value+'%'"
-         onchange="set('bright',Math.max(5,Math.round(this.value/100*255)))">
-  <div class="row" style="margin-top:18px"><label id="t_speed">Vitesse de rotation</label><span class="val" id="sv">-</span></div>
+  <div class="row"><label id="t_speed">Vitesse de rotation</label><span class="val" id="sv">-</span></div>
   <input type="range" id="speed" min="3" max="30" oninput="sv.textContent=this.value+' s'"
          onchange="set('speed',this.value)">
+  <div class="row" style="margin-top:18px"><label id="t_bright">Luminosité</label><span class="val" id="bv">-</span></div>
+  <input type="range" id="bright" min="0" max="100" oninput="bv.textContent=this.value+'%'"
+         onchange="set('bright',Math.max(5,Math.round(this.value/100*255)))">
   <div class="row" style="margin-top:18px"><label id="t_screen">Écran allumé</label>
     <label class="sw"><input type="checkbox" id="screen" onchange="set('screen',this.checked?1:0)"><span class="sl"></span></label>
   </div>
@@ -582,6 +623,12 @@ const TRX={
   gmGone:["Ce match n'est plus dans la liste","This game is no longer listed"],
   noneFav:["Aucun (rotation complète)","None (full rotation)"],
   sched:["matchs à l'horaire aujourd'hui","games scheduled today"],
+  lgToday:[["match aujourd'hui","matchs aujourd'hui"],["game today","games today"]],
+  lgLive:["en direct","live"],
+  lgOff:["Désactivé","Off"],
+  lgEd:["Réorganiser","Reorder"],
+  lgDone:["Terminé","Done"],
+  lgHint:["Déplacez les sports avec les flèches. L'ordre de la rotation au tableau ne change pas.","Move the sports with the arrows. The rotation order on the board does not change."],
   logsShow:["Voir les logs","View logs"],
   logsHide:["Masquer les logs","Hide logs"],
   logsEmpty:["(aucun log pour le moment)","(no logs yet)"],
@@ -638,15 +685,24 @@ let lang=0;   // 0=FR, 1=EN
 let lastState=null;
 
 // ---- Navigation : accueil + 3 pages, par le #hash (le bouton retour du telephone fonctionne) ----
-const VIEWS=['sports','meteo','param'];
+// Les sous-pages des sports (#nhl, #mlb...) s'ouvrent depuis les tuiles de la page Sports ; leur
+// bouton retour ramene a la page Sports.
+const SPV=['nhl','mlb','nfl','nba','ncaa','pwhl','cfl'];
+const VIEWS=['sports','meteo','param'].concat(SPV);
 function curView(){ const h=location.hash.replace('#',''); return VIEWS.includes(h)?h:''; }
 function go(v){ location.hash = v || ''; }
+function goBack(){ go(SPV.includes(curView())?'sports':''); }
+function viewTitle(v){
+  if(SPV.includes(v)) return TR['t_sec'+v[0].toUpperCase()+v.slice(1)][lang];
+  return TRX[v||'home'][lang];
+}
 function showView(){
   const v=curView();
+  if(lgEdit&&v!=='sports') lgEditToggle();
   for(const el of document.querySelectorAll('.view')) el.classList.remove('on');
   document.getElementById('v_'+(v||'home')).classList.add('on');
   backBtn.style.display = v ? 'block' : 'none';
-  hdr.textContent = TRX[v||'home'][lang];
+  hdr.textContent = viewTitle(v);
   window.scrollTo(0,0);
 }
 window.addEventListener('hashchange',showView);
@@ -657,7 +713,7 @@ function applyLang(){
   langEN.classList.toggle('on', lang==1);
   gmApplyLang();
   logsBtn.textContent = logsOpen ? TRX.logsHide[lang] : TRX.logsShow[lang];
-  hdr.textContent = TRX[curView()||'home'][lang];
+  hdr.textContent = viewTitle(curView());
   if(lastState) applyDynamic(lastState);   // re-traduit les parties dynamiques
   schShow();
   if(bdJson) bdRender();
@@ -790,6 +846,7 @@ function applyDynamic(s){
   if(typeof s.gamesNba!=='undefined') document.getElementById('t_spNba').textContent = 'NBA (' + s.gamesNba + ' ' + TRX.sched[lang] + ')';
   if(typeof s.gamesNcaa!=='undefined') document.getElementById('t_spNcaa').textContent = 'NCAA (' + s.gamesNcaa + ' ' + TRX.sched[lang] + ')';
   if(typeof s.gamesPwhl!=='undefined') document.getElementById('t_spPwhl').textContent = TR.t_spPwhl[lang] + ' (' + s.gamesPwhl + ' ' + TRX.sched[lang] + ')';
+  lgApply(s);
   if(typeof s.gamesCfl!=='undefined') document.getElementById('t_spCfl').textContent = TR.t_spCfl[lang] + ' (' + s.gamesCfl + ' ' + TRX.sched[lang] + ')';
   boardApply(s);
   pinApply(s);
@@ -921,6 +978,48 @@ function pinApply(s){
     }
     fillSel(sel,o);
     if(document.activeElement!==sel) sel.value=String(s.pins[k]||0);
+  }
+}
+// ---- Tuiles de la page Sports : matchs du jour et en direct (ordre du firmware) ----
+// Reorganiser : fleches sur chaque tuile, ordre enregistre dans le tableau (tord), page seulement.
+let lgEdit=false, lgOrd=[0,1,2,3,4,5,6];
+function lgOpen(k){ if(!lgEdit) go(SPV[k]); }
+function lgPlace(){
+  const g=lgGrid;
+  lgOrd.forEach((k,i)=>{
+    const t=g.querySelector('.lgT[data-k="'+k+'"]'); g.appendChild(t);
+    const b=t.querySelectorAll('.lgM button'); b[0].disabled=i==0; b[1].disabled=i==lgOrd.length-1;
+  });
+}
+function lgMove(e,k,d){
+  e.stopPropagation();
+  const i=lgOrd.indexOf(k), j=i+d; if(j<0||j>=lgOrd.length) return;
+  [lgOrd[i],lgOrd[j]]=[lgOrd[j],lgOrd[i]];
+  lgPlace();
+  set('tord',lgOrd.join(''));
+  if(lastState) lastState.tord=lgOrd.slice();
+}
+function lgEditToggle(){
+  lgEdit=!lgEdit;
+  lgGrid.classList.toggle('edit',lgEdit);
+  lgEdTxt();
+}
+function lgEdTxt(){
+  lgEd.textContent=(lgEdit?TRX.lgDone:TRX.lgEd)[lang];
+  lgEd.classList.toggle('on',lgEdit);
+  lgHint.textContent=lgEdit?TRX.lgHint[lang]:'';
+}
+function lgApply(s){
+  if(!lgEdit&&Array.isArray(s.tord)&&s.tord.length==7&&s.tord.join()!==lgOrd.join()){ lgOrd=s.tord.slice(); lgPlace(); }
+  lgEdTxt();
+  const on=[s.spNhl,s.spMlb,s.spNfl,s.spNba,s.spNcaa,s.spPwhl,s.spCfl];
+  const n=[s.gamesNhl,s.games,s.gamesNfl,s.gamesNba,s.gamesNcaa,s.gamesPwhl,s.gamesCfl];
+  for(let k=0;k<7;k++){
+    const N=document.getElementById('lgN'+k), L=document.getElementById('lgL'+k); if(!N) continue;
+    const off=on[k]===false, c=n[k]||0, lv=(s.liveN||[])[k]||0;
+    N.parentNode.classList.toggle('off',off);
+    N.textContent=off?TRX.lgOff[lang]:c+' '+TRX.lgToday[lang][(lang==0?c>1:c!=1)?1:0];
+    L.textContent=!off&&lv?'\u25CF '+lv+' '+TRX.lgLive[lang]:'';
   }
 }
 function setPin(k,v){

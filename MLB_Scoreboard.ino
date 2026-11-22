@@ -319,6 +319,9 @@ bool     cfgAltLogoCFL    = false; // logos alternatifs CFL (fichiers "ALT - ...
 // Epingler un sport a un panneau : cfgPin[sport] = numero du panneau (1 = gauche), 0 = dans la rotation.
 // Ordre des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL (comme renderUnified).
 uint8_t  cfgPin[7]        = {0, 0, 0, 0, 0, 0, 0};
+// Ordre des tuiles de la page Sports (bouton Reorganiser) : numeros de sport, meme ordre que cfgPin.
+// Sert seulement a la page web : la rotation du tableau ne change pas.
+uint8_t  cfgTileOrd[7]    = {0, 1, 2, 3, 4, 5, 6};
 
 // ----- Position de la meteo (plus aucune ville/cle ecrite en dur) -----
 // Par defaut : AUTOMATIQUE = geolocalisation de l'adresse IP publique de la
@@ -397,6 +400,11 @@ void loadCfg() {
   panFailWant = prefs.getUChar("panFail", 0);
   if (prefs.getBytesLength("pins") == sizeof(cfgPin)) prefs.getBytes("pins", cfgPin, sizeof(cfgPin));
   for (int k = 0; k < 7; k++) if (cfgPin[k] > PANELS_MAX) cfgPin[k] = 0;
+  if (prefs.getBytesLength("tord") == sizeof(cfgTileOrd)) {
+    uint8_t o[7]; prefs.getBytes("tord", o, sizeof(o));
+    int seen = 0; for (int k = 0; k < 7; k++) if (o[k] < 7) seen |= 1 << o[k];
+    if (seen == 0x7F) memcpy(cfgTileOrd, o, sizeof(o));   // chaque sport une seule fois, sinon ordre par defaut
+  }
   if (cfgWxCity[0]) {   // ville choisie : on reprend sa position memorisee (aucun appel reseau au boot)
     float la = prefs.getFloat("wxLat", NAN), lo = prefs.getFloat("wxLon", NAN);
     if (!isnan(la) && !isnan(lo)) {
@@ -463,6 +471,7 @@ void saveCfg() {
   prefs.putUChar("panels", cfgPanels);
   prefs.putUChar("panFail", panFailWant);
   prefs.putBytes("pins", cfgPin, sizeof(cfgPin));
+  prefs.putBytes("tord", cfgTileOrd, sizeof(cfgTileOrd));
   if (!wxLocIsAuto && !isnan(wxLat) && !isnan(wxLon)) {   // position de la ville choisie
     prefs.putFloat("wxLat", wxLat);
     prefs.putFloat("wxLon", wxLon);
