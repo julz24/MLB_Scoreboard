@@ -82,9 +82,12 @@ bool fetchGamesPWHL() {
   const char* host = "lscluster.hockeytech.com";
   String url = "https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=scorebar&key=";
   url += PWHL_API_KEY;
-  url += "&fmt=json&client_code=pwhl&lang=en&numberofdaysback=1&numberofdaysahead=1";
+  // Le "jour" du scorebar est en retard sur le notre (le 23 nov. a 6 h 52 HNE, il etait
+  // encore le 22) : avec numberofdaysahead=1, les matchs d'aujourd'hui manquaient le matin.
+  // On demande 3 jours de plus ; le filtre de date locale plus bas ne garde que les notres.
+  url += "&fmt=json&client_code=pwhl&lang=en&numberofdaysback=1&numberofdaysahead=3";
 
-  // ~2,5 Ko par match ; 3 jours = rarement plus de 15 matchs.
+  // ~2,5 Ko par match ; 5 jours = rarement plus de 20 matchs.
   int idx = 0;
   uint8_t* buf = httpsDownload("fetchGamesPWHL", host, url, 200000, idx);
   if (!buf) return false;
