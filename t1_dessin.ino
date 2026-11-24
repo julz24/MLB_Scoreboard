@@ -790,16 +790,11 @@ bool drawStandingsSport(int px, int sport) {
 }
 
 // ====================== NHL : BLIT LOGO (28x28) ======================
-// Choisit le logo a afficher pour une equipe NHL : l'alternatif si le
-// toggle est actif ET que cette equipe en a un, sinon le logo normal
-// (toutes les equipes n'ont pas encore de logo alternatif).
+// Choisit le logo a afficher pour une equipe NHL : l'alternatif si cette
+// equipe est cochee (choix equipe par equipe, cfgAltNHL) ET qu'elle en a un,
+// sinon le logo normal.
 const uint16_t* nhlLogoForDisplay(const char* abbr) {
-  // Washington : toujours le logo alternatif, peu importe le toggle general.
-  if (strcmp(abbr, "WSH") == 0) {
-    const uint16_t* alt = nhlAltLogoByAbbrev(abbr);
-    if (alt) return alt;
-  }
-  if (cfgAltLogoNHL) {
+  if (altListHas(cfgAltNHL, abbr)) {
     const uint16_t* alt = nhlAltLogoByAbbrev(abbr);
     if (alt) return alt;
   }
@@ -888,7 +883,7 @@ void drawCenterTextNHL(int px, const char* txt, uint16_t col) {
 // 1 seul panneau au lieu de 2, le 128px complet restant reserve au direct.
 // Logo NHL a 20x20 pour le format compact : natif (net, sans reduction a la
 // volee) pour le logo normal ; repli sur l'ancien logo alternatif 28x28
-// reduit si le toggle "Logo Alternatif NHL" est actif ou pour Washington
+// reduit si l'equipe est cochee dans "Logos alternatifs"
 // (l'alternatif n'a pas ete regenere nativement a 20x20, seul le normal l'a
 // ete - regenerer les 21 logos alternatifs serait un chantier separe).
 // Reduction par MOYENNE DE SURFACE (box filter) d'un logo carre RGB565
@@ -938,8 +933,7 @@ void drawLogoNHLArea(int xo, int yo, const uint16_t* src, int srcSize, int dstSi
 }
 
 void drawNhlTeam20(int x, const char* abbr) {
-  bool useAlt = (strcmp(abbr, "WSH") == 0) || cfgAltLogoNHL;
-  if (useAlt) {
+  if (altListHas(cfgAltNHL, abbr)) {
     const uint16_t* alt = nhlAltLogoByAbbrev(abbr);
     if (alt) { drawLogoNHLArea(x, NFL_LOGO_Y, alt, NHL_LOGO_W, NFL_LOGO_W); return; }
   }
@@ -1309,7 +1303,7 @@ void drawNoGameNFL(int px) {
 }
 
 void drawNoGameNHL(int px) {
-  // Sans favori : bouclier NHL 28x28 natif. Sinon SON logo 28x28 (normal ou alternatif selon le toggle).
+  // Sans favori : bouclier NHL 28x28 natif. Sinon SON logo 28x28 (normal ou alternatif selon le choix de l'equipe).
   if (cfgFavTeamNHL[0] == 0) blit565(px + 1, 2, LOGO_NHL_SHIELD28, NHL_SHIELD28_W, NHL_SHIELD28_H);
   else                       drawLogoNHL(px + 1, 2, nhlLogoForDisplay(cfgFavTeamNHL));
   drawNoGameText(px);
@@ -1403,9 +1397,9 @@ void drawPanelNCAA(int px, const GameNCAA& g) {
 }
 
 // ====================== CFL ======================
-// Meme mise en page que la NFL (GameESPN). Logo alternatif selon le toggle "Logo alternatif" ;
+// Meme mise en page que la NFL (GameESPN). Logo alternatif si l'equipe est cochee (cfgAltCFL) ;
 // code inconnu -> cadre gris (drawTeamLogoNFL).
-static const uint16_t* cflLogo(const char* ab) { return cflLogoByAbbrev(ab, cfgAltLogoCFL); }
+static const uint16_t* cflLogo(const char* ab) { return cflLogoByAbbrev(ab, altListHas(cfgAltCFL, ab)); }
 void drawPanelCFL(int px, const GameCFL& g) {
   drawPanelESPN(px, g, cflLogo(g.awayAbbr), cflLogo(g.homeAbbr));
 }

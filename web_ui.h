@@ -130,6 +130,18 @@ dialog#fwDlg::backdrop{background:rgba(0,0,0,.6)}
 .gst .lv{color:#ff8a80;font-weight:500}
 .gst .lg{font-size:11px;letter-spacing:.06em}
 #gmHint{margin:10px 4px 0;text-align:center}
+/* Logos alternatifs, equipe par equipe : vignette allumee = logo alternatif utilise au tableau */
+.altR{align-items:flex-start}
+.altB{display:flex;gap:6px;flex:none}
+.altB .chip{padding:5px 12px;font-size:13px}
+.altG{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;padding:4px 0 14px}
+.altT{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;border-radius:14px;cursor:pointer;
+  border:2px solid transparent;background:var(--field);color:var(--mut);font:inherit;font-size:12px;font-weight:500}
+.altT canvas{width:40px;height:40px;image-rendering:pixelated;background:#000;border-radius:8px;opacity:.35}
+.altT.on{border-color:var(--pri);color:var(--pri)}
+.altT.on canvas{opacity:1}
+#homeFw{display:block;margin:4px auto 18px;text-align:center;font-size:13px;color:var(--mut)}
+#homeFw.new{color:var(--pri);font-weight:500}
 /* Menus "Equipe favorite" avec logos (le <select> reste en place, cache, pour sa logique) */
 .pk{width:58%;display:flex;align-items:center;gap:10px;font-size:15px;border-radius:12px;border:1px solid var(--line);
   padding:6px 10px;background:var(--field);color:var(--txt);cursor:pointer;text-align:left;min-height:44px}
@@ -186,6 +198,7 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
     <div class="sec" id="t_boards">Autres tableaux</div>
     <div id="bdList"></div>
   </div>
+  <button class="link" id="homeFw" onclick="goFw()"></button>
 </div>
 
 <!-- ===================== SPORTS ===================== -->
@@ -213,9 +226,10 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_wcNhl">Classement meilleur 2e</label>
     <label class="sw"><input type="checkbox" id="wcNhl" onchange="set('wcNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
-  <div class="row"><label id="t_altLogoNhl">Logo alternatif</label>
-    <label class="sw"><input type="checkbox" id="altLogoNhl" onchange="set('altLogoNhl',this.checked?1:0);if(lastState)lastState.altLogoNhl=this.checked;pkSync();gmLoad()"><span class="sl"></span></label>
+  <div class="row altR"><div><div id="t_altLogoNhl">Logos alternatifs</div><div class="hint altH"></div></div>
+    <div class="altB"><button class="chip altA" onclick="altAll(0,1)">Tous</button><button class="chip altN" onclick="altAll(0,0)">Aucun</button></div>
   </div>
+  <div class="altG" id="altG0"></div>
   <div class="row"><label id="t_wideNhl">Chronomètre en direct</label>
     <label class="sw"><input type="checkbox" id="wideNhl" onchange="set('wideNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
@@ -390,9 +404,10 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favCfl">Équipe favorite</label>
     <select id="favCfl" onchange="set('favCfl',this.value)"></select>
   </div>
-  <div class="row"><label id="t_altLogoCfl">Logo alternatif</label>
-    <label class="sw"><input type="checkbox" id="altLogoCfl" onchange="set('altLogoCfl',this.checked?1:0);if(lastState)lastState.altLogoCfl=this.checked;pkSync();gmLoad()"><span class="sl"></span></label>
+  <div class="row altR"><div><div id="t_altLogoCfl">Logos alternatifs</div><div class="hint altH"></div></div>
+    <div class="altB"><button class="chip altA" onclick="altAll(6,1)">Tous</button><button class="chip altN" onclick="altAll(6,0)">Aucun</button></div>
   </div>
+  <div class="altG" id="altG6"></div>
   <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
     <select class="pin" id="pin6" onchange="setPin(6,this.value)"></select>
   </div>
@@ -466,7 +481,7 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
 </div>
 
 <div class="card">
-  <h2 id="t_sys">Système</h2>
+  <h2 id="t_sys" style="scroll-margin-top:80px">Système</h2>
   <div class="kv">
     <div class="k" id="t_ip">Adresse IP</div><div id="sysIp">-</div>
     <div class="k" id="t_net">Réseau</div><div id="sysNet">-</div>
@@ -577,7 +592,7 @@ const TR={
   t_secCfl:["LCF","CFL"],
   t_spCfl:["LCF","CFL"],
   t_favCfl:["Équipe favorite","Favorite team"],
-  t_altLogoCfl:["Logo alternatif","Alternate logo"],
+  t_altLogoCfl:["Logos alternatifs","Alternate logos"],
   t_liveCfl:["Matchs en direct seulement","Live games only"],
   t_showStCfl:["Afficher classement","Show standings"],
   t_games:["Matchs","Games"],
@@ -594,7 +609,7 @@ const TR={
   t_cfAcc:["ACC","ACC"],t_cfB12:["Big 12","Big 12"],t_cfB10:["Big Ten","Big Ten"],t_cfSec:["SEC","SEC"],t_cfP12:["Pac-12","Pac-12"],t_cfHors:["Hors conférence","Other conferences"],
   t_favNc0:["Équipe favorite","Favorite team"],t_favNc1:["Équipe favorite","Favorite team"],t_favNc2:["Équipe favorite","Favorite team"],t_favNc3:["Équipe favorite","Favorite team"],t_favNc4:["Équipe favorite","Favorite team"],t_favNc6:["Équipe favorite","Favorite team"],
   t_liveNcaa:["Matchs en direct seulement","Live games only"],
-  t_altLogoNhl:["Logo alternatif","Alternate logo"],
+  t_altLogoNhl:["Logos alternatifs","Alternate logos"],
   t_speed:["Vitesse de rotation","Rotation speed"],
   t_ota:["Mise à jour manuelle","Manual update"],
   t_reboot:["Redémarrer","Reboot"],
@@ -618,6 +633,9 @@ const TR={
   fwCheckBtn:["Vérifier les mises à jour","Check for updates"]
 };
 const TRX={
+  altHint:["Touche un logo : allumé, il remplace le logo normal au tableau.","Tap a logo: when lit, it replaces the regular logo on the board."],
+  altAll:["Tous","All"], altNone:["Aucun","None"],
+  homeFw:["Version","Version"],
   gmTap:["Touchez un match pour l'afficher au panneau 1","Tap a game to show it on panel 1"],
   gmSent:["Au panneau 1","On panel 1"],
   gmGone:["Ce match n'est plus dans la liste","This game is no longer listed"],
@@ -692,6 +710,8 @@ const VIEWS=['sports','meteo','param'].concat(SPV);
 function curView(){ const h=location.hash.replace('#',''); return VIEWS.includes(h)?h:''; }
 function go(v){ location.hash = v || ''; }
 function goBack(){ go(SPV.includes(curView())?'sports':''); }
+let fwJump=false;
+function goFw(){ fwJump=true; if(curView()==='param') showView(); else go('param'); }   // version de l'accueil -> section Systeme
 function viewTitle(v){
   if(SPV.includes(v)) return TR['t_sec'+v[0].toUpperCase()+v.slice(1)][lang];
   return TRX[v||'home'][lang];
@@ -704,6 +724,8 @@ function showView(){
   backBtn.style.display = v ? 'block' : 'none';
   hdr.textContent = viewTitle(v);
   window.scrollTo(0,0);
+  if(fwJump&&v==='param'){ fwJump=false; t_sys.scrollIntoView({behavior:'smooth',block:'start'}); }
+  altRender();
 }
 window.addEventListener('hashchange',showView);
 
@@ -864,17 +886,18 @@ function load(){fetch('/api/state').then(r=>r.json()).then(s=>{
   document.getElementById('screen').checked=s.screen;wxforce.checked=s.wxforce;
   if(typeof s.wildcard!=='undefined') wildcard.checked=s.wildcard;
   if(typeof s.wcNhl!=='undefined') wcNhl.checked=s.wcNhl;
-  spMlb.checked=s.spMlb;spNhl.checked=s.spNhl;altLogoNhl.checked=s.altLogoNhl;
+  spMlb.checked=s.spMlb;spNhl.checked=s.spNhl;
   spNfl.checked=s.spNfl;liveNfl.checked=s.liveNfl;liveNhl.checked=s.liveNhl;wideNhl.checked=!!s.wideNhl;if(typeof s.goalAnim!=='undefined'){goalAnim.checked=s.goalAnim;tdAnim.checked=s.tdAnim;}liveMlb.checked=s.liveMlb;
   showStMlb.checked=s.showStMlb;showStNhl.checked=s.showStNhl;showStNfl.checked=s.showStNfl;
   if(typeof s.spPwhl!=='undefined'){ spPwhl.checked=s.spPwhl; livePwhl.checked=s.livePwhl; }
   if(typeof s.spNba!=='undefined'){ spNba.checked=s.spNba; liveNba.checked=s.liveNba; showStNba.checked=s.showStNba; }
-  if(typeof s.spCfl!=='undefined'){ spCfl.checked=s.spCfl; liveCfl.checked=s.liveCfl; showStCfl.checked=s.showStCfl; altLogoCfl.checked=!!s.altLogoCfl; }
+  if(typeof s.spCfl!=='undefined'){ spCfl.checked=s.spCfl; liveCfl.checked=s.liveCfl; showStCfl.checked=s.showStCfl; }
   if(typeof s.spNcaa!=='undefined'){ spNcaa.checked=s.spNcaa; liveNcaa.checked=s.liveNcaa; showStNcaa.checked=s.showStNcaa; rkCfp.checked=!!s.rkCfp; cfAcc.checked=s.cfAcc; cfB12.checked=s.cfB12; cfB10.checked=s.cfB10; cfSec.checked=s.cfSec; cfP12.checked=s.cfP12; cfHors.checked=!!s.cfHors; }
   applyDynamic(s);
   schApply(s);
   showWx(s);
   applyLang();
+  altRender();
   pkSync();
 })}
 // ---- Mise a jour du firmware ----
@@ -889,6 +912,8 @@ function showFw(s){
   else if(s.fwStat==4) t+=' · '+TRX.fwInstalling[lang]+' '+s.fwProg+' %';
   if(s.fwErr) t+=' · '+((TRX.fwErrs[s.fwErr]||['?','?'])[lang]).replace('%v','v'+s.fwLatest);
   sysFw.textContent=t;
+  homeFw.textContent=TRX.homeFw[lang]+' '+s.fw+(s.fwStat==3?' · '+TRX.fwAvail[lang]+' v'+s.fwLatest:'');
+  homeFw.classList.toggle('new',s.fwStat==3);
   fwInstBtn.style.display = s.fwStat==3 ? 'inline-block' : 'none';
   fwInstBtn.textContent = TRX.fwInstall[lang]+' v'+s.fwLatest;
   fwCheckBtn.disabled = (s.fwStat==1 || s.fwStat==4);
@@ -1134,7 +1159,7 @@ function gmLoad(){
   if(curView()!=='') return;                                   // seulement sur l'accueil
   fetch('/api/games',{cache:'no-store'}).then(r=>r.ok?r.text():null).then(t=>{
     if(!t) return;
-    const alt=(nhlAlt()?1:0)+''+(cflAlt()?1:0);                  // logos alternatifs LNH / CFL
+    const alt=altList(0)+'/'+altList(6);                          // logos alternatifs LNH / CFL
     let redo=false;
     if(alt!==gmAlt){ if(gmAlt!==null) redo=true; gmAlt=alt; }
     if(t===gmJson&&!redo) return;
@@ -1167,9 +1192,47 @@ function gmApplyLang(){
 // le <select> puis son onchange habituel est declenche : toute la logique existante reste la meme.
 const PK={favNhl:0,fav:1,favNfl:2,favNba:3,favNc0:4,favNc1:4,favNc2:4,favNc3:4,favNc4:4,favNc6:4,favPwhl:5,favCfl:6};
 let pkCur=null;
-function nhlAlt(){ return !!(lastState&&lastState.altLogoNhl); }
-function cflAlt(){ return !!(lastState&&lastState.altLogoCfl); }
-function lk(s,ab){ return s+'|'+ab+(s==0?'|'+(nhlAlt()?1:0):s==6?'|'+(cflAlt()?1:0):''); }    // cle du logo (LNH / CFL : + logo alternatif)
+// Logos alternatifs choisis equipe par equipe : lastState.altNhl / altCfl = ",WSH,CAR," ; altNhlAv / altCflAv =
+// equipes qui en ont un. Apres un clic, le choix local prime quelques secondes (un /api/state deja parti
+// renverrait l'ancienne liste).
+const ALTK={0:'altNhl',6:'altCfl'};
+let altLoc={}, altSig={};
+function altList(s){
+  const l=altLoc[s]; if(l&&Date.now()<l.t) return l.v;
+  return (lastState&&lastState[ALTK[s]])||',';
+}
+function altOn(s,ab){ return altList(s).includes(','+ab+','); }
+function lk(s,ab){ return s+'|'+ab+(s==0||s==6?'|'+(altOn(s,ab)?1:0):''); }    // cle du logo (LNH / CFL : + logo alternatif)
+function altAv(s){ return ((lastState&&lastState[ALTK[s]+'Av'])||'').split(',').filter(Boolean); }
+function altRender(){
+  for(const s of [0,6]){
+    const g=document.getElementById('altG'+s); if(!g) continue;
+    const r=g.previousElementSibling;
+    for(const h of r.querySelectorAll('.altH')) h.textContent=TRX.altHint[lang];
+    r.querySelector('.altA').textContent=TRX.altAll[lang]; r.querySelector('.altN').textContent=TRX.altNone[lang];
+    if(curView()!==(s?'cfl':'nhl')) continue;                   // vignettes chargees seulement sur la page du sport
+    const av=altAv(s), sig=av.join()+'/'+altList(s);
+    if(altSig[s]===sig) continue;
+    altSig[s]=sig;
+    g.innerHTML=av.map(ab=>'<button type="button" class="altT'+(altOn(s,ab)?' on':'')+'" data-a="'+ab+'">'+
+      '<canvas data-l="'+s+'|'+ab+'|1" width="1" height="1"></canvas>'+ab+'</button>').join('');
+    for(const c of g.querySelectorAll('canvas')) gmPaint(c);
+  }
+}
+function altSave(s,v){
+  altLoc[s]={v:v,t:Date.now()+6000};
+  if(lastState) lastState[ALTK[s]]=v;
+  set(ALTK[s],encodeURIComponent(v.split(',').filter(Boolean).join(',')));
+  altRender(); pkSync(); gmLoad();
+}
+function altTap(s,ab){
+  const l=altList(s);
+  altSave(s, altOn(s,ab) ? l.replace(','+ab+',',',') : l+ab+',');
+}
+function altAll(s,on){ altSave(s, on ? ','+altAv(s).map(a=>a+',').join('') : ','); }
+for(const s of [0,6]) document.getElementById('altG'+s).addEventListener('click',e=>{
+  const b=e.target.closest('.altT'); if(b) altTap(s,b.dataset.a);
+});
 function pkNone(v){ return v===''||v==='0'; }
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function pkInit(){

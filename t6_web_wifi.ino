@@ -186,7 +186,10 @@ void handleState() {
   j += ",\"spMlb\":" + String(cfgSportMLB ? "true" : "false");
   j += ",\"spNhl\":" + String(cfgSportNHL ? "true" : "false");
   j += ",\"favNhl\":\"" + String(cfgFavTeamNHL) + "\"";
-  j += ",\"altLogoNhl\":" + String(cfgAltLogoNHL ? "true" : "false");
+  j += ",\"altNhl\":\"" + String(cfgAltNHL) + "\"";
+  j += ",\"altNhlAv\":\"";   // equipes qui ont un logo alternatif
+  for (int i = 0; i < NHL_ALT_LOGO_COUNT; i++) { if (i) j += ","; j += NHL_ALT_LOGOS[i].abbr; }
+  j += "\"";
   j += ",\"gamesNhl\":" + String(gameCountNHL);
   j += ",\"wideNhl\":" + String(cfgWideNHL ? "true" : "false");
   j += ",\"goalAnim\":" + String(cfgGoalAnimNHL ? "true" : "false");
@@ -206,7 +209,10 @@ void handleState() {
   j += ",\"favCfl\":\"" + String(cfgFavTeamCFL) + "\"";
   j += ",\"liveCfl\":" + String(cfgLiveOnlyCFL ? "true" : "false");
   j += ",\"showStCfl\":" + String(cfgShowStandCFL ? "true" : "false");
-  j += ",\"altLogoCfl\":" + String(cfgAltLogoCFL ? "true" : "false");
+  j += ",\"altCfl\":\"" + String(cfgAltCFL) + "\"";
+  j += ",\"altCflAv\":\"";
+  { bool first = true; for (int i = 0; i < (int)CFL_LOGO_COUNT; i++) if (CFL_LOGOS[i].alt != CFL_LOGOS[i].data) { if (!first) j += ","; first = false; j += CFL_LOGOS[i].abbr; } }
+  j += "\"";
   j += ",\"gamesCfl\":" + String(gameCountCFL);
   j += ",\"spNcaa\":" + String(cfgSportNCAA ? "true" : "false");
   for (int k = 0; k < 7; k++) j += ",\"favNc" + String(k) + "\":\"" + String(cfgFavNCAA[k]) + "\"";
@@ -295,6 +301,25 @@ void handleGames() {
   server.send(200, "application/json", j);
 }
 
+// Liste des logos alternatifs recue de la web UI ("WSH,CAR") -> ",WSH,CAR," ; on ne garde que les
+// equipes qui ont vraiment un logo alternatif (sport 0 = LNH, 6 = CFL). Construite a cote puis copiee.
+static void setAltList(String in, int sport, char* dst, size_t cap) {
+  char out[120] = ",";
+  in.toUpperCase();
+  int p = 0;
+  while (p < (int)in.length()) {
+    int c = in.indexOf(',', p); if (c < 0) c = in.length();
+    String ab = in.substring(p, c); ab.trim();
+    p = c + 1;
+    if (ab.length() < 2 || ab.length() > 3) continue;
+    bool ok = sport == 0 ? nhlAltLogoByAbbrev(ab.c_str()) != nullptr
+                         : cflLogoByAbbrev(ab.c_str(), true) != cflLogoByAbbrev(ab.c_str(), false);
+    if (!ok || altListHas(out, ab.c_str()) || strlen(out) + ab.length() + 2 > cap) continue;
+    strcat(out, ab.c_str()); strcat(out, ",");
+  }
+  strncpy(dst, out, cap - 1); dst[cap - 1] = 0;
+}
+
 // Logo d'une equipe tel qu'il est sur le panneau : 1 octet largeur, 1 octet hauteur, puis les pixels
 // RGB565 (petit-boutiste). /api/logo?s=<sport>&a=<abreviation, ou id MLB>
 void handleLogo() {
@@ -302,13 +327,16 @@ void handleLogo() {
   String a = server.arg("a");
   const uint16_t* px = nullptr; int w = 20, h = 20;
   switch (s) {
-    case 0: px = nhlLogoForDisplay(a.c_str()); w = NHL_LOGO_W; h = NHL_LOGO_H; break;
+    case 0:   // alt=1 / alt=0 : force le logo alternatif / normal (vignettes "Logos alternatifs")
+      if (!server.hasArg("alt")) px = nhlLogoForDisplay(a.c_str());
+      else { if (server.arg("alt") == "1") px = nhlAltLogoByAbbrev(a.c_str()); if (!px) px = nhlLogoByAbbrev(a.c_str()); }
+      w = NHL_LOGO_W; h = NHL_LOGO_H; break;
     case 1: px = mlbLogoById(a.toInt()); w = MLB_LOGO_W; h = MLB_LOGO_H; break;
     case 2: px = nflLogoByAbbrev(a.c_str()); break;
     case 3: px = nbaLogoByAbbrev(a.c_str()); break;
     case 4: px = ncaaLogo(a.c_str()); break;
     case 5: px = pwhlLogoByAbbrev(a.c_str()); break;
-    case 6: px = cflLogoByAbbrev(a.c_str(), server.hasArg("alt") ? server.arg("alt") == "1" : cfgAltLogoCFL); break;
+    case 6: px = cflLogoByAbbrev(a.c_str(), server.hasArg("alt") ? server.arg("alt") == "1" : altListHas(cfgAltCFL, a.c_str())); break;
   }
   if (!px) { server.send(404, "text/plain", "aucun logo"); return; }
   static uint8_t buf[2 + 28 * 28 * 2];
@@ -386,7 +414,7 @@ void handleSet() {
   if (server.hasArg("lang")) { cfgLang = server.arg("lang").toInt() == 1 ? 1 : 0; dirty = true; }
   if (server.hasArg("spMlb")) { cfgSportMLB = server.arg("spMlb").toInt() == 1; dirty = true; if (cfgSportMLB) { lastFetch = millis() - FETCH_MS_SLOW - 1; lastStand = millis() - STAND_MS - 1; } }
   if (server.hasArg("spNhl")) { cfgSportNHL = server.arg("spNhl").toInt() == 1; dirty = true; if (cfgSportNHL) { lastFetchNHL = millis() - FETCH_MS_SLOW - 1; lastStandNHL = millis() - STAND_MS - 1; } }
-  if (server.hasArg("altLogoNhl")) { cfgAltLogoNHL = server.arg("altLogoNhl").toInt() == 1; dirty = true; }
+  if (server.hasArg("altNhl")) { setAltList(server.arg("altNhl"), 0, cfgAltNHL, sizeof(cfgAltNHL)); dirty = true; }
   if (server.hasArg("favNhl")) {
     String fn = server.arg("favNhl");
     fn.toUpperCase();
@@ -425,7 +453,7 @@ void handleSet() {
   if (server.hasArg("spCfl")) { cfgSportCFL = server.arg("spCfl").toInt() == 1; dirty = true; if (cfgSportCFL) { lastFetchCFL = millis() - FETCH_MS_SLOW - 1; lastStandCFL = millis() - STAND_MS - 1; } }
   if (server.hasArg("liveCfl")) { cfgLiveOnlyCFL = server.arg("liveCfl").toInt() == 1; buildRotationCFL(); }
   if (server.hasArg("showStCfl")) { cfgShowStandCFL = server.arg("showStCfl").toInt() == 1; dirty = true; }
-  if (server.hasArg("altLogoCfl")) { cfgAltLogoCFL = server.arg("altLogoCfl").toInt() == 1; dirty = true; }
+  if (server.hasArg("altCfl")) { setAltList(server.arg("altCfl"), 6, cfgAltCFL, sizeof(cfgAltCFL)); dirty = true; }
   if (server.hasArg("favCfl")) {
     String fc = server.arg("favCfl");
     fc.toUpperCase();

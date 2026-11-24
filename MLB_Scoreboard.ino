@@ -289,7 +289,13 @@ uint8_t  cfgLang         = 0;     // 0 = FR, 1 = EN
 bool     cfgSportMLB     = true;  // MLB actif
 bool     cfgSportNHL     = true;  // NHL actif
 char     cfgFavTeamNHL[4] = "";    // abreviation NHL favorite ; "" = aucun (choisi dans la web UI)
-bool     cfgAltLogoNHL   = false; // true = utilise logos_alt_nhl.h au lieu de logos_nhl.h (quand disponible)
+// Logos alternatifs choisis equipe par equipe : liste ",WSH,CAR," (virgule avant et apres chaque code).
+// Seules les equipes qui ont un logo alternatif peuvent y figurer (valide a la reception, /api/set).
+char     cfgAltNHL[120]  = ",WSH,";
+static bool altListHas(const char* list, const char* ab) {
+  char k[8]; snprintf(k, sizeof(k), ",%s,", ab);
+  return strstr(list, k) != nullptr;
+}
 bool     cfgGoalAnimNHL  = true;  // animation plein ecran quand le favori LNH marque
 bool     cfgGoalAnimNFL  = true;  // animation plein ecran quand le favori NFL marque (>= 3 pts)
 // Les indicateurs AN/PP (LNH) et possession (NFL) sont toujours actifs (plus de reglage).
@@ -315,7 +321,7 @@ bool     cfgSportCFL      = false; // CFL active (desactivee par defaut)
 char     cfgFavTeamCFL[4] = "";    // code CFL favori (MTL, WPG, BC...) ; "" = aucun
 bool     cfgLiveOnlyCFL   = false; // CFL : matchs en direct seulement
 bool     cfgShowStandCFL  = true;  // classement Est / Ouest dans la rotation
-bool     cfgAltLogoCFL    = false; // logos alternatifs CFL (fichiers "ALT - ...")
+char     cfgAltCFL[40]    = ",";   // logos alternatifs CFL choisis equipe par equipe (meme format que cfgAltNHL)
 // Epingler un sport a un panneau : cfgPin[sport] = numero du panneau (1 = gauche), 0 = dans la rotation.
 // Ordre des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL (comme renderUnified).
 uint8_t  cfgPin[7]        = {0, 0, 0, 0, 0, 0, 0};
@@ -366,7 +372,11 @@ void loadCfg() {
   cfgLang         = prefs.getUChar("lang", 0);
   cfgSportMLB     = prefs.getBool("spMlb", true);
   cfgSportNHL     = prefs.getBool("spNhl", true);
-  cfgAltLogoNHL   = prefs.getBool("altLogoNhl", false);
+  if (prefs.isKey("altNhlL")) prefs.getString("altNhlL", cfgAltNHL, sizeof(cfgAltNHL));
+  else if (prefs.getBool("altLogoNhl", false)) {   // ancien interrupteur global (<= 3.2) : toutes les equipes qui ont un ALT
+    strcpy(cfgAltNHL, ",");
+    for (int i = 0; i < NHL_ALT_LOGO_COUNT; i++) { strcat(cfgAltNHL, NHL_ALT_LOGOS[i].abbr); strcat(cfgAltNHL, ","); }
+  }   // sinon : ",WSH," (Washington etait toujours en alternatif)
   cfgWideNHL      = prefs.getBool("wideNhl", false);
   cfgGoalAnimNHL  = prefs.getBool("goalAnim", true);              // ancienne cle commune : garde le choix existant
   cfgGoalAnimNFL  = prefs.getBool("tdAnim", cfgGoalAnimNHL);
@@ -381,7 +391,11 @@ void loadCfg() {
   cfgSportCFL     = prefs.getBool("spCfl", false);
   cfgLiveOnlyCFL  = prefs.getBool("liveCfl", false);
   cfgShowStandCFL = prefs.getBool("showStCfl", true);
-  cfgAltLogoCFL   = prefs.getBool("altLogoCfl", false);
+  if (prefs.isKey("altCflL")) prefs.getString("altCflL", cfgAltCFL, sizeof(cfgAltCFL));
+  else if (prefs.getBool("altLogoCfl", false)) {   // ancien interrupteur global
+    strcpy(cfgAltCFL, ",");
+    for (int i = 0; i < (int)CFL_LOGO_COUNT; i++) if (CFL_LOGOS[i].alt != CFL_LOGOS[i].data) { strcat(cfgAltCFL, CFL_LOGOS[i].abbr); strcat(cfgAltCFL, ","); }
+  }
   { String fc = prefs.getString("favCfl", ""); fc.toCharArray(cfgFavTeamCFL, sizeof(cfgFavTeamCFL)); }
   cfgSportNCAA     = prefs.getBool("spNcaa", false);
   cfgLiveOnlyNCAA  = prefs.getBool("liveNcaa", false);
@@ -438,7 +452,7 @@ void saveCfg() {
   prefs.putUChar("lang", cfgLang);
   prefs.putBool("spMlb", cfgSportMLB);
   prefs.putBool("spNhl", cfgSportNHL);
-  prefs.putBool("altLogoNhl", cfgAltLogoNHL);
+  prefs.putString("altNhlL", cfgAltNHL);
   prefs.putBool("wideNhl", cfgWideNHL);
   prefs.putBool("goalAnim", cfgGoalAnimNHL);
   prefs.putBool("tdAnim", cfgGoalAnimNFL);
@@ -453,7 +467,7 @@ void saveCfg() {
   prefs.putBool("spCfl", cfgSportCFL);
   prefs.putBool("liveCfl", cfgLiveOnlyCFL);
   prefs.putBool("showStCfl", cfgShowStandCFL);
-  prefs.putBool("altLogoCfl", cfgAltLogoCFL);
+  prefs.putString("altCflL", cfgAltCFL);
   prefs.putString("favCfl", String(cfgFavTeamCFL));
   prefs.putBool("spNcaa", cfgSportNCAA);
   prefs.putBool("liveNcaa", cfgLiveOnlyNCAA);
