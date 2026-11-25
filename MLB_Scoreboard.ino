@@ -322,7 +322,8 @@ char     cfgFavTeamCFL[4] = "";    // code CFL favori (MTL, WPG, BC...) ; "" = a
 bool     cfgLiveOnlyCFL   = false; // CFL : matchs en direct seulement
 bool     cfgShowStandCFL  = true;  // classement Est / Ouest dans la rotation
 char     cfgAltCFL[40]    = ",";   // logos alternatifs CFL choisis equipe par equipe (meme format que cfgAltNHL)
-// Epingler un sport a un panneau : cfgPin[sport] = numero du panneau (1 = gauche), 0 = dans la rotation.
+// Epingler un sport a un ou plusieurs panneaux : cfgPin[sport] = panneaux coches, bit i = panneau i+1
+// (bit 0 = gauche) ; 0 = dans la rotation. Un panneau n'appartient qu'a un sport.
 // Ordre des sports : 0 NHL, 1 MLB, 2 NFL, 3 NBA, 4 NCAA, 5 PWHL, 6 CFL (comme renderUnified).
 uint8_t  cfgPin[7]        = {0, 0, 0, 0, 0, 0, 0};
 // Ordre des tuiles de la page Sports (bouton Reorganiser) : numeros de sport, meme ordre que cfgPin.
@@ -412,8 +413,12 @@ void loadCfg() {
   { String bn = prefs.getString("bname", DEFAULT_NAME); bn.toCharArray(cfgName, sizeof(cfgName)); if (!cfgName[0]) strcpy(cfgName, DEFAULT_NAME); }
   cfgPanels   = constrain(prefs.getUChar("panels", 4), PANELS_MIN, PANELS_MAX);
   panFailWant = prefs.getUChar("panFail", 0);
-  if (prefs.getBytesLength("pins") == sizeof(cfgPin)) prefs.getBytes("pins", cfgPin, sizeof(cfgPin));
-  for (int k = 0; k < 7; k++) if (cfgPin[k] > PANELS_MAX) cfgPin[k] = 0;
+  if (prefs.getBytesLength("pinM") == sizeof(cfgPin)) prefs.getBytes("pinM", cfgPin, sizeof(cfgPin));
+  else if (prefs.getBytesLength("pins") == sizeof(cfgPin)) {    // avant 3.4 : un seul panneau par sport (son numero)
+    prefs.getBytes("pins", cfgPin, sizeof(cfgPin));
+    for (int k = 0; k < 7; k++) cfgPin[k] = (cfgPin[k] >= 1 && cfgPin[k] <= PANELS_MAX) ? 1 << (cfgPin[k] - 1) : 0;
+  }
+  for (int k = 0, taken = 0; k < 7; k++) { cfgPin[k] &= ((1 << PANELS_MAX) - 1) & ~taken; taken |= cfgPin[k]; }
   if (prefs.getBytesLength("tord") == sizeof(cfgTileOrd)) {
     uint8_t o[7]; prefs.getBytes("tord", o, sizeof(o));
     int seen = 0; for (int k = 0; k < 7; k++) if (o[k] < 7) seen |= 1 << o[k];
@@ -484,7 +489,7 @@ void saveCfg() {
   prefs.putString("bname", String(cfgName));
   prefs.putUChar("panels", cfgPanels);
   prefs.putUChar("panFail", panFailWant);
-  prefs.putBytes("pins", cfgPin, sizeof(cfgPin));
+  prefs.putBytes("pinM", cfgPin, sizeof(cfgPin));
   prefs.putBytes("tord", cfgTileOrd, sizeof(cfgTileOrd));
   if (!wxLocIsAuto && !isnan(wxLat) && !isnan(wxLon)) {   // position de la ville choisie
     prefs.putFloat("wxLat", wxLat);

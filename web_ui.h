@@ -63,7 +63,22 @@ select,input[type=text]{width:58%;font-size:15px;border-radius:12px;border:1px s
 .pill:disabled{opacity:.4;cursor:default}
 .pinL{font-size:15px;color:var(--txt)}
 .pinH{margin-top:3px}
-select.pin{width:auto;min-width:104px;flex:none}
+.pinD{position:relative;flex:none}
+.pinB{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:104px;font-size:15px;border-radius:12px;
+  border:1px solid var(--line);padding:10px 12px;background:var(--field);color:var(--txt);cursor:pointer}
+.pinB:after{content:"";width:7px;height:7px;border:solid var(--mut);border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg)}
+.pinM{display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:20;min-width:100%;padding:6px 0;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px #000a}
+.pinD.up .pinM{top:auto;bottom:calc(100% + 4px)}
+.pinD.open .pinM{display:block}
+.pinO{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;border:none;background:transparent;
+  color:var(--txt);font-size:15px;padding:10px 14px;cursor:pointer;white-space:nowrap;text-align:left}
+.pinO.sel{background:var(--tile)}
+.pinO:disabled{color:var(--mut);cursor:default}
+.pinO i{position:relative;width:20px;height:20px;border:2px solid #8a9199;border-radius:5px;flex:none}
+.pinO:disabled i{opacity:.4}
+.pinO.on i{background:var(--pri);border-color:var(--pri)}
+.pinO.on i:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #003258;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .hn{font-size:13px;color:var(--mut);margin-top:2px}
 .hint a{color:var(--pri)}
 .hint.warn{color:var(--err)}
@@ -233,8 +248,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_wideNhl">Chronomètre en direct</label>
     <label class="sw"><input type="checkbox" id="wideNhl" onchange="set('wideNhl',this.checked?1:0)"><span class="sl"></span></label>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin0" onchange="setPin(0,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin0"></div>
   </div>
   <div class="row"><label id="t_liveNhl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNhl" onchange="set('liveNhl',this.checked?1:0)"><span class="sl"></span></label>
@@ -261,8 +276,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_wildcard">Classement meilleur 2e</label>
     <label class="sw"><input type="checkbox" id="wildcard" onchange="set('wildcard',this.checked?1:0)"><span class="sl"></span></label>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin1" onchange="setPin(1,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin1"></div>
   </div>
   <div class="row"><label id="t_liveMlb">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveMlb" onchange="set('liveMlb',this.checked?1:0)"><span class="sl"></span></label>
@@ -282,8 +297,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favNfl">Équipe favorite</label>
     <select id="favNfl" onchange="set('favNfl',this.value)"></select>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin2" onchange="setPin(2,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin2"></div>
   </div>
   <div class="row"><label id="t_liveNfl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNfl" onchange="set('liveNfl',this.checked?1:0)"><span class="sl"></span></label>
@@ -307,8 +322,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favNba">Équipe favorite</label>
     <select id="favNba" onchange="set('favNba',this.value)"></select>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin3" onchange="setPin(3,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin3"></div>
   </div>
   <div class="row"><label id="t_liveNba">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNba" onchange="set('liveNba',this.checked?1:0)"><span class="sl"></span></label>
@@ -325,8 +340,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_spNcaa">NCAA</label>
     <label class="sw"><input type="checkbox" id="spNcaa" onchange="set('spNcaa',this.checked?1:0)"><span class="sl"></span></label>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin4" onchange="setPin(4,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin4"></div>
   </div>
   <div class="row"><label id="t_liveNcaa">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveNcaa" onchange="set('liveNcaa',this.checked?1:0)"><span class="sl"></span></label>
@@ -386,8 +401,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
   <div class="row"><label id="t_favPwhl">Équipe favorite</label>
     <select id="favPwhl" onchange="set('favPwhl',this.value)"></select>
   </div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin5" onchange="setPin(5,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin5"></div>
   </div>
   <div class="row"><label id="t_livePwhl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="livePwhl" onchange="set('livePwhl',this.checked?1:0)"><span class="sl"></span></label>
@@ -408,8 +423,8 @@ dialog#pkDlg::backdrop{background:rgba(0,0,0,.6)}
     <div class="altB"><button class="chip altA" onclick="altAll(6,1)">Tous</button><button class="chip altN" onclick="altAll(6,0)">Aucun</button></div>
   </div>
   <div class="altG" id="altG6"></div>
-  <div class="row"><div><div class="pinL">Épingler au panneau</div><div class="hint pinH"></div></div>
-    <select class="pin" id="pin6" onchange="setPin(6,this.value)"></select>
+  <div class="row"><div><div class="pinL">Épingler aux panneaux</div><div class="hint pinH"></div></div>
+    <div class="pinD" id="pin6"></div>
   </div>
   <div class="row"><label id="t_liveCfl">Matchs en direct seulement</label>
     <label class="sw"><input type="checkbox" id="liveCfl" onchange="set('liveCfl',this.checked?1:0)"><span class="sl"></span></label>
@@ -660,8 +675,8 @@ const TRX={
   panBoot:["Redémarrage…","Restarting…"],
   panFail:["%n panneaux n'ont pas pu démarrer (mémoire insuffisante) : le tableau est revenu à %m.","%n panels could not start (not enough memory): the board went back to %m."],
   bdPanels:["panneaux","panels"],
-  pinL:["Épingler au panneau","Pin to panel"],
-  pinH:["Ce panneau montre toujours ce sport : le match de l'équipe favorite, sinon les matchs du sport. Il ne fait plus partie de la rotation. Panneau 1 = à gauche.","This panel always shows this sport: the favorite team's game, otherwise the sport's games. It leaves the rotation. Panel 1 = leftmost."],
+  pinL:["Épingler aux panneaux","Pin to panels"],
+  pinH:["Les panneaux cochés montrent toujours ce sport : le favori, puis ses autres matchs. Un panneau de plus sans match reprend la rotation. Panneau 1 = à gauche.","Checked panels always show this sport: the favorite, then its other games. An extra panel with no game rejoins the rotation. Panel 1 = leftmost."],
   pinNo:["Non","No"],
   pinWx:["météo","weather"],
   identMsg:["Le tableau affiche son adresse pendant 10 secondes.","The board shows its address for 10 seconds."],
@@ -985,26 +1000,59 @@ function setPanels(n){
   panHint.dataset.boot=1; panHint.textContent=TRX.panBoot[lang]; panHint.className='hint';
   setTimeout(()=>location.reload(),12000);
 }
-// ---- Epingler un sport a un panneau (pin0..pin6, ordre du firmware : LNH MLB NFL NBA NCAA LPHF LCF) ----
-// Le menu n'offre que les panneaux du tableau (Parametres > Nombre de panneaux) ; celui de la meteo
-// est grise. Un panneau deja pris par un autre sport porte son nom : le choisir y deplace ce sport.
+// ---- Epingler un sport a des panneaux (pm0..pm6, ordre du firmware : LNH MLB NFL NBA NCAA LPHF LCF) ----
+// Menu a cases : on coche un ou plusieurs panneaux (bit 0 = panneau 1). Seuls les panneaux du tableau
+// sont offerts ; celui de la meteo est grise. Un panneau deja pris par un autre sport porte son nom :
+// le cocher l'enleve a cet autre sport. Apres un clic, le choix local prime quelques secondes.
 const PIN_SP=[['LNH','NHL'],['MLB','MLB'],['NFL','NFL'],['NBA','NBA'],['NCAA','NCAA'],['LPHF','PWHL'],['LCF','CFL']];
+let pinOpen=-1, pinLoc=null;
+function pinMasks(s){ return pinLoc&&Date.now()<pinLoc.t ? pinLoc.v : s.pinM; }
+function pinTxt(m){ const a=[]; for(let p=1;p<=6;p++) if(m&(1<<(p-1))) a.push(p); return a.length?a.join(', '):TRX.pinNo[lang]; }
 function pinApply(s){
-  if(!s.pins) return;
-  const n=s.panels||4;
+  if(!s||!s.pinM) return;
+  const n=s.panels||4, P=pinMasks(s);
   document.querySelectorAll('.pinL').forEach(e=>e.textContent=TRX.pinL[lang]);
   document.querySelectorAll('.pinH').forEach(e=>e.textContent=TRX.pinH[lang]);
   for(let k=0;k<7;k++){
-    const sel=document.getElementById('pin'+k); if(!sel) continue;
-    let o='<option value="0">'+TRX.pinNo[lang]+'</option>';
+    const d=document.getElementById('pin'+k); if(!d) continue;
+    const m=P[k]||0;
+    let o='<button type="button" class="pinB">'+pinTxt(m)+'</button><div class="pinM">'+
+      '<button type="button" class="pinO'+(m?'':' sel')+'" data-p="0"><span>'+TRX.pinNo[lang]+'</span></button>';
     for(let p=1;p<=n;p++){
-      const wx=s.wxforce&&p==n, who=s.pins.findIndex((v,j)=>j!=k&&v==p);
-      o+='<option value="'+p+'"'+(wx?' disabled':'')+'>'+p+(wx?' · '+TRX.pinWx[lang]:who>=0?' · '+PIN_SP[who][lang]:'')+'</option>';
+      const b=1<<(p-1), wx=s.wxforce&&p==n, who=P.findIndex((v,j)=>j!=k&&(v&b));
+      o+='<button type="button" class="pinO'+(m&b&&!wx?' on':'')+'" data-p="'+p+'"'+(wx?' disabled':'')+'><span>'+p+
+        (wx?' · '+TRX.pinWx[lang]:who>=0?' · '+PIN_SP[who][lang]:'')+'</span><i></i></button>';
     }
-    fillSel(sel,o);
-    if(document.activeElement!==sel) sel.value=String(s.pins[k]||0);
+    o+='</div>';
+    fillSel(d,o);
+    d.classList.toggle('open',pinOpen===k);
   }
 }
+function pinSet(k,m){
+  set('pm'+k,m);
+  if(!lastState||!lastState.pinM) return;
+  const v=pinMasks(lastState).map((x,j)=>j==k?m:x&~m);   // un panneau coche ici quitte l'autre sport
+  pinLoc={v:v,t:Date.now()+6000};
+  lastState.pinM=v.slice();
+  pinApply(lastState);
+}
+document.addEventListener('click',e=>{
+  const d=e.target.closest('.pinD');
+  if(!d){ if(pinOpen>=0){ pinOpen=-1; pinApply(lastState); } return; }
+  const k=+d.id.slice(3);
+  if(e.target.closest('.pinB')){
+    pinOpen=pinOpen===k?-1:k;
+    if(pinOpen===k){                                          // pas de place sous le bouton : le menu s'ouvre vers le haut
+      const r=d.getBoundingClientRect(), h=((lastState&&lastState.panels)||4)*44+60;
+      d.classList.toggle('up',innerHeight-r.bottom<h&&r.top>h);
+    }
+    pinApply(lastState); return;
+  }
+  const o=e.target.closest('.pinO'); if(!o||o.disabled||!lastState) return;
+  const p=+o.dataset.p, m=pinMasks(lastState)[k]||0;
+  if(!p) pinOpen=-1;
+  pinSet(k, p ? m^(1<<(p-1)) : 0);
+});
 // ---- Tuiles de la page Sports : matchs du jour et en direct (ordre du firmware) ----
 // Reorganiser : fleches sur chaque tuile, ordre enregistre dans le tableau (tord), page seulement.
 let lgEdit=false, lgOrd=[0,1,2,3,4,5,6];
@@ -1046,14 +1094,6 @@ function lgApply(s){
     N.textContent=off?TRX.lgOff[lang]:c+' '+TRX.lgToday[lang][(lang==0?c>1:c!=1)?1:0];
     L.textContent=!off&&lv?'\u25CF '+lv+' '+TRX.lgLive[lang]:'';
   }
-}
-function setPin(k,v){
-  set('pin'+k,v);
-  if(!lastState||!lastState.pins) return;
-  v=+v;
-  if(v) lastState.pins=lastState.pins.map((x,j)=>j!=k&&x==v?0:x);   // l'autre sport retourne dans la rotation
-  lastState.pins[k]=v;
-  pinApply(lastState);
 }
 // ---- Autres tableaux du reseau (decouverte mDNS par le tableau : /api/boards) ----
 let bdJson='';

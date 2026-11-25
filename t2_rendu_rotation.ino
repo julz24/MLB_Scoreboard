@@ -257,11 +257,10 @@ static int slotRoom(const int* fs, int nf, int s) {
   while (s + r < nf && fs[s + r] == fs[s] + r) r++;
   return r;
 }
-// Panneau (0 = gauche) ou le sport k est epingle, -1 s'il est dans la rotation (ou si
-// l'epingle ne vaut plus : sport desactive, panneau inexistant ou reserve a la meteo).
-static int pinIdx(int k, int limit) {
-  int p = cfgPin[k];
-  return (p >= 1 && p <= limit && sportOn(k)) ? p - 1 : -1;
+// Panneaux (bit i = panneau i, 0 = gauche) ou le sport k est epingle ; 0 s'il est dans la rotation
+// (ou si l'epingle ne vaut plus : sport desactive, panneaux inexistants ou reserve a la meteo).
+static int pinMask(int k, int limit) {
+  return sportOn(k) ? (cfgPin[k] & ((1 << limit) - 1)) : 0;
 }
 
 void renderUnified() {
@@ -273,29 +272,40 @@ void renderUnified() {
   // Match choisi dans la page web : il remplace le panneau de son sport pour une etape.
   int fSp = (forceOn && forcedIdx() >= 0) ? forceSp : -1;
 
-  // --- 0) Sports epingles : chacun sur SON panneau, hors de la rotation ---
+  // --- 0) Sports epingles : sur LEURS panneaux, hors de la rotation ---
+  // 1er panneau coche = panneau principal du sport (favori, sinon rotation, sinon classement) ;
+  // les suivants montrent ses autres matchs. Plus de match a montrer : le panneau retourne dans la rotation.
   bool busy[PANELS_MAX] = {false};
-  int pinAt[NSPORT];
+  int pinAt[NSPORT];              // 1er panneau epingle du sport, -1 = dans la rotation
+  int pinM[NSPORT];
+  int taken = 0;
   for (int k = 0; k < NSPORT; k++) {
-    int p = pinIdx(k, limit);
-    if (p >= 0 && busy[p]) p = -1;                            // 2 sports sur le meme panneau (ne devrait pas arriver) : le 1er gagne
-    pinAt[k] = p;
-    if (p >= 0) busy[p] = true;
+    int m = pinMask(k, limit) & ~taken;                       // panneau coche pour 2 sports (ne devrait pas arriver) : le 1er gagne
+    pinM[k] = m; taken |= m; pinAt[k] = -1;
+    for (int i = 0; i < limit; i++) if (m & (1 << i)) { if (pinAt[k] < 0) pinAt[k] = i; busy[i] = true; }
   }
-  // NHL epingle en direct : 2 panneaux si celui de droite est libre (sinon format compact).
+  // NHL epingle en direct : 2 panneaux si celui de droite est libre ou aussi epingle a la LNH (sinon format compact).
   bool nhlWide = false;
   if (pinAt[0] >= 0) {
     int p = pinAt[0];
     int gi = (fSp == 0) ? forcedIdx() : (favIdxNHL >= 0 ? favIdxNHL : (rotCountNHL > 0 ? rotListNHL[rotBaseNHL % rotCountNHL] : -1));
     bool live = gi >= 0 && gi < gameCountNHL && gamesNHL[gi].state == 1;
     bool want = live && (cfgWideNHL || (fSp != 0 && gi == favIdxNHL));
-    if (want && p + 1 < limit && !busy[p + 1]) { busy[p + 1] = true; nhlWide = true; }
+    if (want && p + 1 < limit && (!busy[p + 1] || (pinM[0] & (1 << (p + 1))))) { busy[p + 1] = true; nhlWide = true; }
   }
+  int extra[NSPORT] = {0};        // matchs supplementaires de chaque sport deja a l'ecran
   for (int k = 0; k < NSPORT; k++) {
     if (pinAt[k] < 0) continue;
     int w = (k == 0 && nhlWide) ? 2 : 1;
-    if (k == fSp) drawForced(PX[pinAt[k]], w);              // le match choisi s'affiche sur le panneau epingle de son sport
+    if (k == fSp) drawForced(PX[pinAt[k]], w);              // le match choisi s'affiche sur le 1er panneau epingle de son sport
     else          drawSportPrimary(k, PX[pinAt[k]], w == 2);
+    for (int i = pinAt[k] + w; i < limit; i++) {              // autres panneaux coches : les autres matchs du sport
+      if (!(pinM[k] & (1 << i))) continue;
+      int room = 0, used = 1;
+      while (i + room < limit && (pinM[k] & (1 << (i + room)))) room++;
+      if (drawSportExtra(k, PX[i], extra, room, &used)) i += used - 1;
+      else busy[i] = false;                                   // rien de plus a montrer : le panneau reprend la rotation
+    }
   }
 
   // Panneaux libres pour la rotation, de gauche a droite.
@@ -342,7 +352,6 @@ void renderUnified() {
   // fixe, pour une rotation equitable quand plusieurs sports ont des matchs
   // supplementaires disponibles en meme temps. Un sport epingle a un panneau
   // n'en fait plus partie : ses matchs restent sur son panneau.
-  int extra[NSPORT] = {0};
   int standIdx = 0;
   int panelsFilled = 0;
   while (s < nf) {

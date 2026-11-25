@@ -174,7 +174,7 @@ void handleState() {
   j += ",\"panWant\":" + String(panFailWant);
   { const esp_partition_t* run = esp_ota_get_running_partition();   // espace programme : firmware / partition
     j += ",\"appUsed\":" + String(ESP.getSketchSize()) + ",\"appSlot\":" + String(run ? run->size : 0); }
-  j += ",\"pins\":[";
+  j += ",\"pinM\":[";
   for (int k = 0; k < 7; k++) j += (k ? "," : "") + String(cfgPin[k]);
   j += "]";
   j += ",\"tord\":[";
@@ -480,13 +480,14 @@ void handleSet() {
     buildRotationNCAA();
     if (cfgSportNCAA) lastFetchNCAA = millis() - FETCH_MS_SLOW - 1;   // sa conference n'est peut-etre pas encore telechargee
   }
-  for (int k = 0; k < 7; k++) {    // epingler un sport : pin0..pin6 = numero du panneau (0 = rotation)
-    char key[6]; snprintf(key, sizeof(key), "pin%d", k);
+  // Panneaux ou un sport n'est pas permis : inexistants, ou celui de la meteo.
+  int pinOk = ((1 << cfgPanels) - 1) & ~(cfgForceWeather ? 1 << (cfgPanels - 1) : 0);
+  for (int k = 0; k < 7; k++) {    // epingler un sport : pm0..pm6 = panneaux coches (bit 0 = panneau 1), 0 = rotation
+    char key[6]; snprintf(key, sizeof(key), "pm%d", k);
     if (!server.hasArg(key)) continue;
-    int p = server.arg(key).toInt();
-    if (p < 0 || p > cfgPanels || (cfgForceWeather && p == cfgPanels)) p = 0;   // pas de panneau inexistant ni celui de la meteo
-    if (p) for (int o = 0; o < 7; o++) if (o != k && cfgPin[o] == p) cfgPin[o] = 0;   // un seul sport par panneau : l'autre retourne dans la rotation
-    cfgPin[k] = p;
+    int m = server.arg(key).toInt() & pinOk;
+    for (int o = 0; o < 7; o++) if (o != k) cfgPin[o] &= ~m;   // un seul sport par panneau : l'autre sport le perd
+    cfgPin[k] = m;
   }
   if (server.hasArg("tord")) {   // ordre des tuiles de la page Sports : 7 chiffres, chaque sport une fois (ex. 1023456)
     String t = server.arg("tord");
@@ -495,7 +496,8 @@ void handleSet() {
     if (seen == 0x7F) memcpy(cfgTileOrd, o, sizeof(o));
   }
   // Meteo activee ou moins de panneaux : un sport epingle sur un panneau devenu indisponible retourne dans la rotation.
-  for (int k = 0; k < 7; k++) if (cfgPin[k] > cfgPanels || (cfgForceWeather && cfgPin[k] == cfgPanels)) cfgPin[k] = 0;
+  pinOk = ((1 << cfgPanels) - 1) & ~(cfgForceWeather ? 1 << (cfgPanels - 1) : 0);
+  for (int k = 0; k < 7; k++) cfgPin[k] &= pinOk;
   if (server.hasArg("wxCity")) {   // ville de la meteo ("" = automatique par IP)
     String c = server.arg("wxCity");
     c.trim();
